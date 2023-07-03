@@ -4,9 +4,22 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
+scikit-learn = "*"
+stockfish = "*"
+numpy = "*"
+matplotlib = "*"
+torch = "*"
 keras = "*"
+tensorflow = "*"
+scikit-image = "*"
+tqdm = "*"
+ipywidgets = "*"
+pyautogui = "*"
 
 [dev-packages]
+ruff = "*"
+black = "*"
+isort = "*"
 
 [requires]
-python_version = "3.7"
+python_version = "3.11.2"

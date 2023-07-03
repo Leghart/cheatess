@@ -1,0 +1,32 @@
+[tool.black]
+exclude = '''
+/(
+  | \.vscode
+  | \.git
+  | venv
+  | __pycache__
+  | Pipfile
+  | Pipfile.lock
+
+  # The following are specific to Black, you probably don't want those.
+  | blib2to3
+  | tests/data
+  | profiling
+
+)/
+'''
+line-length = 119
+target-version = ['py310']
+
+[tool.ruff]
+line-length = 119
+select = [
+    "F401",
+    "F403",
+]
+
+
+exclude = [
+    "venv"
+]
+
