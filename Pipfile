@@ -13,8 +13,9 @@ keras = "*"
 tensorflow = "*"
 scikit-image = "*"
 tqdm = "*"
-ipywidgets = "*"
 pyautogui = "*"
+customtkinter = "*"
+screeninfo = "*"
 
 [dev-packages]
 ruff = "*"
