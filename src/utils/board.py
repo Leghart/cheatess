@@ -7,7 +7,7 @@ class InvalidMove(Exception):
 
 
 IDX_TO_SIGN = {0: "a", 1: "b", 2: "c", 3: "d", 4: "e", 5: "f", 6: "g", 7: "h"}
-
+BLACK_IDX_TO_SIGN = {7: "a", 6: "b", 5: "c", 4: "d", 3: "e", 2: "f", 1: "g", 0: "h"}
 
 _TMove = tuple[str, int]
 
@@ -28,26 +28,31 @@ def fen_to_list(fen: str) -> list[str]:
     return _list
 
 
-def get_position_from_idx(idx: int) -> _TMove:
-    return (IDX_TO_SIGN[idx % 8], -math.ceil((idx + 1) / 8) + 9)
+def get_position_from_idx(idx: int, white_on_move: bool) -> _TMove:
+    if white_on_move:
+        return (IDX_TO_SIGN[idx % 8], -math.ceil((idx + 1) / 8) + 9)
+
+    return (BLACK_IDX_TO_SIGN[idx % 8], math.ceil(idx / 8))
 
 
-def fit_board_to_move(move1: _TMove, move2: _TMove, board1: list[str], board2: list[str]) -> tuple[_TMove, _TMove]:
+def fit_board_to_move(
+    move1: _TMove, move2: _TMove, board1: list[str], board2: list[str], white_on_move: bool
+) -> tuple[_TMove, _TMove]:
     """Return move_from, move_to"""
     move1_piece, move1_idx = move1[0], move1[1]
     move2_idx = move2[1]
 
     if board1[move1_idx] == move1_piece and board2[move2_idx] == move1_piece and board2[move1_idx] == "":
-        move_from = get_position_from_idx(move1_idx)
-        move_to = get_position_from_idx(move2_idx)
+        move_from = get_position_from_idx(move1_idx, white_on_move)
+        move_to = get_position_from_idx(move2_idx, white_on_move)
     else:
-        move_from = get_position_from_idx(move2_idx)
-        move_to = get_position_from_idx(move1_idx)
+        move_from = get_position_from_idx(move2_idx, white_on_move)
+        move_to = get_position_from_idx(move1_idx, white_on_move)
 
     return move_from, move_to
 
 
-def get_diff_move(board1: list[str], board2: list[str]) -> str:
+def get_diff_move(board1: list[str], board2: list[str], white_on_move: bool) -> str:
     moved_pieces: list[_TMove] = []
     moved_from_to_save: _TMove = ()
     moved_to_to_save: _TMove = ()
@@ -62,9 +67,9 @@ def get_diff_move(board1: list[str], board2: list[str]) -> str:
         raise InvalidMove
 
     if len(moved_pieces) == 2:
-        move_from, move_to = fit_board_to_move(moved_pieces[0], moved_pieces[1], board1, board2)
-        moved_from_to_save = move_from
-        moved_to_to_save = move_to
+        moved_from_to_save, moved_to_to_save = fit_board_to_move(
+            moved_pieces[0], moved_pieces[1], board1, board2, white_on_move
+        )
 
     if len(moved_pieces) == 3:  # en passant
         white_pawn_occured = reduce(lambda total, sublist: total + (1 if "P" in sublist else 0), moved_pieces, 0)
@@ -72,20 +77,23 @@ def get_diff_move(board1: list[str], board2: list[str]) -> str:
 
         if white_pawn_occured < black_pawn_occured:
             pawn_move_idxes = [pos[1] for pos in moved_pieces if pos[0] == "p"]
-            moved_from_to_save = get_position_from_idx(pawn_move_idxes[0])
-            moved_to_to_save = get_position_from_idx(pawn_move_idxes[1])
+            moved_from_to_save = get_position_from_idx(pawn_move_idxes[0], white_on_move)
+            moved_to_to_save = get_position_from_idx(pawn_move_idxes[1], white_on_move)
 
         else:
             pawn_move_idxes = sorted([pos[1] for pos in moved_pieces if pos[0] == "P"])[::-1]
-            moved_from_to_save = get_position_from_idx(pawn_move_idxes[0])
-            moved_to_to_save = get_position_from_idx(pawn_move_idxes[1])
+            moved_from_to_save = get_position_from_idx(pawn_move_idxes[0], white_on_move)
+            moved_to_to_save = get_position_from_idx(pawn_move_idxes[1], white_on_move)
+
+        if not white_on_move:
+            moved_from_to_save, moved_to_to_save = moved_to_to_save, moved_from_to_save
 
     elif len(moved_pieces) == 4:  # castle
         king_move_idxes = [pos[1] for pos in moved_pieces if pos[0] in ("K", "k")]
         if not moved_pieces[0][0] in ("K", "k"):  # long castle
             king_move_idxes = sorted(king_move_idxes)[::-1]
 
-        moved_from_to_save = get_position_from_idx(king_move_idxes[0])
-        moved_to_to_save = get_position_from_idx(king_move_idxes[1])
+        moved_from_to_save = get_position_from_idx(king_move_idxes[0], white_on_move)
+        moved_to_to_save = get_position_from_idx(king_move_idxes[1], white_on_move)
 
     return f"{moved_from_to_save[0]}{moved_from_to_save[1]}{moved_to_to_save[0]}{moved_to_to_save[1]}"
