@@ -11,17 +11,27 @@ class Singleton(type):
         return cls._instances[cls]
 
 
-class CacheLoader(metaclass=Singleton):
+class Cache(metaclass=Singleton):
     def __init__(self) -> None:
-        f = open(Path(__file__).parent.parent.resolve() / ".cache.json")
-        self.cache = json.load(f)
+        self.__path = Path(__file__).parent.parent.resolve() / ".cache.json"
+        f = open(self.__path)
+        self.__cache = json.load(f)
         f.close()
 
     def __str__(self):
-        return str(self.cache)
+        return str(self.__cache)
 
     def __getitem__(self, key):
         try:
-            return self.cache[key]
+            return self.__cache[key]
         except KeyError:
             return None
+
+    def __setitem__(self, key, value):
+        self.__cache[key] = value
+        self.__save()
+
+    def __save(self):
+        with open(self.__path, "w") as f:
+            data = json.dumps(self.__cache)
+            f.write(data)
