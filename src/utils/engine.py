@@ -9,7 +9,7 @@ from stockfish import Stockfish
 from src.cnn.model import init_model, predict_fen_from_image
 from src.log import LogLevel, LogQueue, Message, MovesQueue
 from src.utils.board import InvalidMove, fen_to_list, get_diff_move
-from src.utils.cache_loader import CacheLoader
+from src.utils.cache_loader import Cache
 
 PIECES = {
     Stockfish.Piece.BLACK_PAWN: "\u265F",
@@ -146,6 +146,11 @@ class Engine:
     def board_coords(self, coords: tuple[int]) -> None:
         self._board_coords = coords
 
+    def update_parameters(self, level: int, time_thinking: int, depth: int, memory: int, threads: int):
+        config = {"UCI_Elo": level, "Minimum Thinking Time": time_thinking, "Hash": memory, "Threads": threads}
+        self.stockfish.update_engine_parameters(config)
+        self.stockfish.set_depth(depth)
+
     def _load_stockfish(self):
-        path_to_engine = CacheLoader()["stockfish_engine_path"]
+        path_to_engine = Cache()["stockfish_engine_path"]
         self.stockfish = Stockfish(path_to_engine)
