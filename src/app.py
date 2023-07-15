@@ -14,7 +14,7 @@ class App(ctk.CTk):
         super().__init__()
 
         self.title("Cheatess")
-        self.geometry(f"{900}x{680}")
+        self.geometry(f"{900}x{730}")
 
         self.grid_columnconfigure(1, weight=1)
 

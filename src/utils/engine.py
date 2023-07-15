@@ -6,8 +6,9 @@ import numpy as np
 import pyautogui
 from stockfish import Stockfish
 
+import src.utils.types as t
 from src.cnn.model import init_model, predict_fen_from_image
-from src.log import LogLevel, LogQueue, Message, MovesQueue
+from src.log import EvaluationQueue, LogLevel, LogQueue, Message, MovesQueue
 from src.utils.board import InvalidMove, fen_to_list, get_diff_move
 from src.utils.cache_loader import Cache
 
@@ -30,7 +31,7 @@ PIECES = {
 class Engine:
     def __init__(self):
         self._board_coords = None
-        self._thread: Optional[Thread] = None
+        self._thread_scanning: Optional[Thread] = None
         self.stop_thread: bool = False
         self.play_color: Literal["white", "black"] = "white"
         self._load_stockfish()
@@ -41,7 +42,7 @@ class Engine:
         self._current_board = image.resize((400, 400))
 
     def save_screenshot(self):
-        self._current_board.save("/home/leghart/projects/cheatess/current_board.png")
+        self._current_board.save("/home/leghart/projects/cheatess/images/current_board.png")
 
     def image_to_array(self):
         self.take_screenshot()
@@ -94,12 +95,18 @@ class Engine:
                 self.stockfish.make_moves_from_current_position([move])
                 best_move = self.stockfish.get_best_move()
                 # TODO Show which exactly piece should move
-                piece_to_move = self.stockfish.get_what_is_on_square(best_move[:2])
+                evaluation = self.stockfish.get_evaluation()
+
+                EvaluationQueue.send(evaluation)
 
                 # doesnt show opponent's best moves
                 if moves_counter % 2 == 0:
-                    msg = Message(f"{PIECES[piece_to_move]}{best_move[2:]}", LogLevel.INFO)
-                    MovesQueue.send(msg)
+                    msg_dict: t.StatisticsDict = {
+                        "wdl_stats": self.stockfish.get_wdl_stats(),
+                        "top_moves": self.__translate_top_moves(self.stockfish.get_top_moves(3)),
+                        "best_move": self.__get_piece_from_position(best_move),
+                    }
+                    MovesQueue.send(msg_dict)
                     # TODO add arrows to img
 
             except Exception as err:
@@ -116,11 +123,11 @@ class Engine:
 
         msg = Message("Started scanning board", LogLevel.SUCCESS)
         LogQueue.send(msg)
-        self._thread = Thread(target=self.scan_screen)
-        self._thread.start()
+        self._thread_scanning = Thread(target=self.scan_screen)
+        self._thread_scanning.start()
 
     def stop_scaning_thread(self):
-        if not self._thread:
+        if not self._thread_scanning:
             msg = Message("You have to start scanning first", LogLevel.ERROR)
             LogQueue.send(msg)
             return
@@ -128,7 +135,7 @@ class Engine:
         msg = Message("Stopped scanning board", LogLevel.ERROR)
         LogQueue.send(msg)
         self.stop_thread = True
-        self._thread.join()
+        self._thread_scanning.join()
 
     def toggle_color(self) -> str:
         if self.play_color == "white":
@@ -154,3 +161,26 @@ class Engine:
     def _load_stockfish(self):
         path_to_engine = Cache()["stockfish_engine_path"]
         self.stockfish = Stockfish(path_to_engine)
+
+    def __get_piece_from_position(self, position: str) -> str:
+        piece_to_move = self.stockfish.get_what_is_on_square(position[:2])
+        return f"{PIECES[piece_to_move]}{position[2:]}"
+
+    def __translate_top_moves(self, top_moves: list[t.TopMoves]) -> list[t.FinalTopMoves]:
+        result = []
+
+        for top_move in top_moves:
+            batch: t.FinalTopMoves = {}
+            batch["move"] = self.__get_piece_from_position(top_move["Move"])
+
+            if top_move["Mate"]:
+                if (cp := top_move["Centipawn"]) > 0:
+                    batch["evaluation"] = f"M{cp}"
+                else:
+                    batch["evaluation"] = f"-M{abs(cp)}"
+            else:
+                batch["evaluation"] = top_move["Centipawn"]
+
+            result.append(batch)
+
+        return result

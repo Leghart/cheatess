@@ -1,60 +1,61 @@
+from __future__ import annotations
+
 import time
 from threading import Thread
+from typing import TYPE_CHECKING
 
 import customtkinter as ctk
 
-from src.log import Message, MovesQueue
+import src.utils.types as t
+from src.log import LogLevel, MovesQueue
+
+if TYPE_CHECKING:
+    from src.components.views import ScanningView
+    from src.utils.engine import Engine
 
 
 class MoveBox(ctk.CTkTextbox):
-    def __init__(self, master: ctk.CTk, view, engine):
-        super().__init__(master, height=40, width=75, corner_radius=0, font=("Helvetica", 24))
+    def __init__(self, master: ctk.CTk, view: ScanningView, engine: Engine):
+        super().__init__(master, height=200, width=600, corner_radius=0, font=("Helvetica", 22))
         self.parent = view
         self.engine_handler = engine
-        self.current_color_button = ctk.CTkButton(
-            self,
-            text=f"Play as: {self.engine_handler.play_color}",
-            command=self._change_color,
-            fg_color=self.engine_handler.play_color,
-            text_color="black",
-        )
-        self.current_color_button.grid(row=1, column=0, padx=20, pady=10)
 
-        self.grid(row=2, column=0, padx=20, pady=50)
+        self.grid(row=3, column=0, padx=20)
         self.configure(state="disabled")
 
         thread = Thread(target=self.fetch_queue)
         thread.start()
-
-    def _change_color(self):
-        new_color = self.engine_handler.toggle_color()
-        self.current_color_button.configure(text=f"Play as: {new_color}")
-
-        if new_color == "white":
-            self.current_color_button.configure(text_color="black", fg_color=new_color)
-        else:
-            self.current_color_button.configure(text_color="white", fg_color=new_color)
-
-        self.parent._set_image(new_color)
-        # TODO change image
 
     def clear_logs(self) -> None:
         self.configure(state="normal")
         self.delete(1.0, ctk.END)
         self.configure(state="disabled")
 
-    def add_log(self, message: Message) -> None:
+    def _set_layout(self, msg_dict: t.StatisticsDict) -> str:
+        top_moves_msg = ""
+        for batch in msg_dict["top_moves"]:
+            top_moves_msg += f"\n{round(batch['evaluation']/100,1)}: {batch['move']}"
+
+        msg = f"""
+Best move: {msg_dict['best_move']}
+Top moves: {top_moves_msg} 
+Win-Draw-Loss stats (%): {'-'.join([str(int(x/10)) for x in msg_dict['wdl_stats']])}
+        """
+        return msg
+
+    def add_log(self, msg_dict: t.StatisticsDict) -> None:
         self.configure(state="normal")
         self.delete(0.0, ctk.END)
-        self.insert("0.0", message.body, message.level)
+        msg = self._set_layout(msg_dict)
+        self.insert("0.0", msg, LogLevel.INFO)
         self.yview(ctk.END)
         self.configure(state="disabled")
 
     def fetch_queue(self):
         while True:
             try:
-                if message := MovesQueue.recv():
-                    self.add_log(message)
+                if msg_dict := MovesQueue.recv():
+                    self.add_log(msg_dict)
             except IndexError:
                 pass
             time.sleep(0.1)
