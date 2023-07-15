@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import tkinter as tk
+from typing import TYPE_CHECKING
 
 import customtkinter as ctk
 
@@ -6,14 +9,16 @@ from src.components.logbox import LogBox
 from src.utils.engine import Engine
 from src.utils.snippet_machine import SnippetMachine
 
+if TYPE_CHECKING:
+    from src.app import App
+
 
 class SideBar(ctk.CTkFrame):
     engine_handler = Engine()
     snippet = SnippetMachine()
 
-    def __init__(self, master: ctk.CTk):
+    def __init__(self, master: App):
         super().__init__(master, corner_radius=0)
-        self.master = master
 
         self.master_screen = tk.Toplevel(self)
         self.master_screen.withdraw()
@@ -23,8 +28,17 @@ class SideBar(ctk.CTkFrame):
 
         self.grid(row=0, column=0, rowspan=30, sticky="nsew")
 
-        self.help_button = ctk.CTkButton(self, text="Undo move")
-        self.help_button.grid(row=1, column=0, padx=20, pady=10)
+        self.undo_move_button = ctk.CTkButton(self, text="Undo move")
+        self.undo_move_button.grid(row=1, column=0, padx=20, pady=10)
+
+        self.current_color_button = ctk.CTkButton(
+            self,
+            text=f"Play as: {self.engine_handler.play_color}",
+            command=self._change_color,
+            fg_color=self.engine_handler.play_color,
+            text_color="black",
+        )
+        self.current_color_button.grid(row=1, column=1, padx=20, pady=10)
 
         self.scan_screen_button = ctk.CTkButton(self, text="Get board coordinates", command=self._create_screen_canvas)
         self.scan_screen_button.grid(row=3, column=0, padx=20, pady=10)
@@ -52,8 +66,6 @@ class SideBar(ctk.CTkFrame):
             self.current_color_button.configure(text_color="black", fg_color=new_color)
         else:
             self.current_color_button.configure(text_color="white", fg_color=new_color)
-
-        # TODO change image
 
     def _create_screen_canvas(self):
         self.master_screen.deiconify()

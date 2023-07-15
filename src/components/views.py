@@ -1,31 +1,81 @@
+from __future__ import annotations
+
 import time
 import tkinter as tk
 from threading import Thread
+from typing import TYPE_CHECKING, Literal, TypedDict
 
 import customtkinter as ctk
 from PIL import Image, ImageTk
 
 from src.components.movebox import MoveBox
-from src.log import LogLevel, LogQueue, Message
+from src.log import EvaluationQueue, LogLevel, LogQueue, Message
 from src.utils.cache_loader import Cache
 from src.utils.engine import Engine
 
+if TYPE_CHECKING:
+    from src.components.tabview import TabView
+
+
+class _TEval(TypedDict):
+    value: int
+    type: Literal["cp", "mate"]
+
 
 class ScanningView(ctk.CTkFrame):
-    def __init__(self, master: ctk.CTkTabview, engine_handler: Engine):
+    def __init__(self, master: TabView, engine_handler: Engine):
         super().__init__(master)
         self.tab = self.master.tab("Scanning")
+
         self.board_visual = ctk.CTkLabel(self.tab, text="")
         self.board_visual.grid(row=0, column=0)
 
-        self.movebox = MoveBox(self.tab, view=self, engine=engine_handler)
+        self.slider_progressbar_frame = ctk.CTkFrame(self.tab, fg_color="transparent")
+        self.slider_progressbar_frame.grid(row=1, column=0)
 
+        self._thread_update_evaluation = Thread(target=self.collect_evaluations)
+        self._thread_update_evaluation.start()
+
+        self.evalbar_label = ctk.CTkLabel(self.tab, text="0.0")
+        self.evalbar_label.grid(row=1, column=0)
+        self.evalbar = ctk.CTkProgressBar(self.slider_progressbar_frame, orientation="horizontal")
+        self.evalbar.grid(row=2, columnspan=2, padx=20, pady=20)
+        self.evalbar.set(0.5)
+
+        self.movebox = MoveBox(self.tab, view=self, engine=engine_handler)
         self.start_thread_update_board()
+
+    def collect_evaluations(self):
+        prev_eval: _TEval = None
+        while True:
+            time.sleep(0.1)
+            curr_eval: _TEval = EvaluationQueue.recv()
+
+            if prev_eval == curr_eval:
+                continue
+
+            if curr_eval:
+                self._update_evalbar(curr_eval)
+                prev_eval = curr_eval
+
+    def _update_evalbar(self, eval_: _TEval) -> None:
+        if eval_["type"] == "cp":
+            scaled_val = eval_["value"] / 100
+            f = lambda x: 0.05 * x + 0.5
+            self.evalbar.set(f(scaled_val))
+            self.evalbar_label.configure(text=scaled_val)
+        else:
+            if (val := eval_["value"]) > 0:
+                self.evalbar.set(1)
+                self.evalbar_label.configure(text=f"M{val}")
+            else:
+                self.evalbar.set(0)
+                self.evalbar_label.configure(text=f"-M{abs(val)}")
 
     def _update_board(self):
         while True:
             try:
-                image = Image.open("/home/leghart/projects/cheatess/current_board.png")
+                image = Image.open("/home/leghart/projects/cheatess/images/current_board.png")
                 image_tk = ImageTk.PhotoImage(image)
                 time.sleep(0.2)
                 self.board_visual.configure(image=image_tk)
@@ -39,7 +89,7 @@ class ScanningView(ctk.CTkFrame):
 
 # TODO: validate ranges
 class StockfishView(ctk.CTkFrame):
-    def __init__(self, master: ctk.CTkTabview, engine_handler: Engine):
+    def __init__(self, master: TabView, engine_handler: Engine):
         super().__init__(master, bg_color="red")
 
         self.tab = self.master.tab("Stockfish")
