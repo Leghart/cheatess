@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import os
 import time
 import tkinter as tk
-from threading import Thread
 from typing import TYPE_CHECKING, Literal, TypedDict
 
 import customtkinter as ctk
@@ -12,6 +12,7 @@ from src.components.movebox import MoveBox
 from src.log import EvaluationQueue, LogLevel, LogQueue, Message
 from src.utils.cache_loader import Cache
 from src.utils.engine import Engine
+from src.utils.thread import QueueThread, Thread
 
 if TYPE_CHECKING:
     from src.components.tabview import TabView
@@ -29,12 +30,12 @@ class ScanningView(ctk.CTkFrame):
 
         self.board_visual = ctk.CTkLabel(self.tab, text="")
         self.board_visual.grid(row=0, column=0)
+        self.update_board_with_image("default.png")
 
         self.slider_progressbar_frame = ctk.CTkFrame(self.tab, fg_color="transparent")
         self.slider_progressbar_frame.grid(row=1, column=0)
 
-        self._thread_update_evaluation = Thread(target=self.collect_evaluations)
-        self._thread_update_evaluation.start()
+        self.thread_update_evaluation = QueueThread(EvaluationQueue, self._update_evalbar).start()
 
         self.evalbar_label = ctk.CTkLabel(self.tab, text="0.0")
         self.evalbar_label.grid(row=1, column=0)
@@ -43,20 +44,10 @@ class ScanningView(ctk.CTkFrame):
         self.evalbar.set(0.5)
 
         self.movebox = MoveBox(self.tab, view=self, engine=engine_handler)
-        self.start_thread_update_board()
-
-    def collect_evaluations(self):
-        prev_eval: _TEval = None
-        while True:
-            time.sleep(0.1)
-            curr_eval: _TEval = EvaluationQueue.recv()
-
-            if prev_eval == curr_eval:
-                continue
-
-            if curr_eval:
-                self._update_evalbar(curr_eval)
-                prev_eval = curr_eval
+        self.thread_update_board = Thread(
+            self.update_board_with_image,
+            path_to_img="current_board.png",
+        ).start()
 
     def _update_evalbar(self, eval_: _TEval) -> None:
         if eval_["type"] == "cp":
@@ -72,19 +63,14 @@ class ScanningView(ctk.CTkFrame):
                 self.evalbar.set(0)
                 self.evalbar_label.configure(text=f"-M{abs(val)}")
 
-    def _update_board(self):
-        while True:
-            try:
-                image = Image.open("/home/leghart/projects/cheatess/images/current_board.png")
-                image_tk = ImageTk.PhotoImage(image)
-                time.sleep(0.2)
-                self.board_visual.configure(image=image_tk)
-            except OSError:
-                continue
-
-    def start_thread_update_board(self):
-        t = Thread(target=self._update_board)
-        t.start()
+    def update_board_with_image(self, path_to_img: str = "default.png"):
+        try:
+            image = Image.open(os.path.join("/home/leghart/projects/cheatess/images", path_to_img))
+            image_tk = ImageTk.PhotoImage(image)
+            time.sleep(0.2)
+            self.board_visual.configure(image=image_tk)
+        except OSError:
+            pass
 
 
 # TODO: validate ranges

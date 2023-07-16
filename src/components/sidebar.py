@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import tkinter as tk
 from typing import TYPE_CHECKING
 
@@ -48,7 +49,7 @@ class SideBar(ctk.CTkFrame):
         )
         self.start_scanning_button.grid(row=4, column=0, padx=20, pady=10)
         self.stop_scanning_button = ctk.CTkButton(
-            self, text="Stop scanning", command=self.engine_handler.stop_scaning_thread, fg_color="red"
+            self, text="Stop scanning", command=self.__stop_scanning, fg_color="red"
         )
         self.stop_scanning_button.grid(row=4, column=1, padx=20, pady=10)
 
@@ -84,6 +85,10 @@ class SideBar(ctk.CTkFrame):
         self.master_screen.attributes("-topmost", True)
 
     def __on_button_press(self, event):
+        # Reset threads
+        self.engine_handler.thread = None
+        self.engine_handler.board_coords = None
+
         self.snippet.start_x = self.snip_surface.canvasx(event.x)
         self.snippet.start_y = self.snip_surface.canvasy(event.y)
         self.snip_surface.create_rectangle(0, 0, 1, 1, outline="SkyBlue1", width=3, fill="grey60")
@@ -101,9 +106,15 @@ class SideBar(ctk.CTkFrame):
         self.engine_handler.board_coords = self.snippet.get_frame()
         self.engine_handler.take_screenshot()
         self.engine_handler.save_screenshot()
+        self.master.tabview.scanning_view.update_board_with_image("current_board.png")
 
         self.snip_surface.destroy()
         self.master_screen.withdraw()
         self.master.deiconify()
 
         return event
+
+    def __stop_scanning(self):
+        self.engine_handler.stop_scaning_thread()
+        self.master.tabview.scanning_view.thread_update_board.stop()
+        self.master.tabview.scanning_view.update_board_with_image()
