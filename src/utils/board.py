@@ -32,7 +32,7 @@ def get_position_from_idx(idx: int, white_on_move: bool) -> _TMove:
     if white_on_move:
         return (IDX_TO_SIGN[idx % 8], -math.ceil((idx + 1) / 8) + 9)
 
-    return (BLACK_IDX_TO_SIGN[idx % 8], math.ceil(idx / 8))
+    return (BLACK_IDX_TO_SIGN[idx % 8], math.floor(idx / 8) + 1)
 
 
 def fit_board_to_move(

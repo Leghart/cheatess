@@ -31,6 +31,17 @@ PIECES = {
 }
 
 
+def print_board(fen: str):
+    for row in fen.split("/"):
+        for p in row:
+            if p.isdigit():
+                print("." * int(p), end="")
+            else:
+                print(p, end="")
+        print(end="\n")
+    print("\n")
+
+
 class Engine:
     def __init__(self):
         self._board_coords = None
