@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import time
-from threading import Thread
 from typing import TYPE_CHECKING
 
 import customtkinter as ctk
 
 import src.utils.types as t
 from src.log import LogLevel, MovesQueue
+from src.utils.thread import QueueThread
 
 if TYPE_CHECKING:
     from src.components.views import ScanningView
@@ -23,8 +23,7 @@ class MoveBox(ctk.CTkTextbox):
         self.grid(row=3, column=0, padx=20)
         self.configure(state="disabled")
 
-        thread = Thread(target=self.fetch_queue)
-        thread.start()
+        self.thread = QueueThread(queue=MovesQueue, redirect_data=self.add_log).start()
 
     def clear_logs(self) -> None:
         self.configure(state="normal")
@@ -50,12 +49,3 @@ Win-Draw-Loss stats (%): {'-'.join([str(int(x/10)) for x in msg_dict['wdl_stats'
         self.insert("0.0", msg, LogLevel.INFO)
         self.yview(ctk.END)
         self.configure(state="disabled")
-
-    def fetch_queue(self):
-        while True:
-            try:
-                if msg_dict := MovesQueue.recv():
-                    self.add_log(msg_dict)
-            except IndexError:
-                pass
-            time.sleep(0.1)

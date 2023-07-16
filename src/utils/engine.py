@@ -1,9 +1,9 @@
 import time
-from threading import Thread
 from typing import Literal, Optional
 
 import numpy as np
 import pyautogui
+from keras.models import Model as KerasModel
 from stockfish import Stockfish
 
 import src.utils.types as t
@@ -11,6 +11,9 @@ from src.cnn.model import init_model, predict_fen_from_image
 from src.log import EvaluationQueue, LogLevel, LogQueue, Message, MovesQueue
 from src.utils.board import InvalidMove, fen_to_list, get_diff_move
 from src.utils.cache_loader import Cache
+
+# from threading import Thread
+from src.utils.thread import Thread
 
 PIECES = {
     Stockfish.Piece.BLACK_PAWN: "\u265F",
@@ -31,7 +34,7 @@ PIECES = {
 class Engine:
     def __init__(self):
         self._board_coords = None
-        self._thread_scanning: Optional[Thread] = None
+        self.thread: Optional[Thread] = None
         self.stop_thread: bool = False
         self.play_color: Literal["white", "black"] = "white"
         self._load_stockfish()
@@ -49,93 +52,84 @@ class Engine:
         return np.array(self._current_board)
 
     def scan_screen(self) -> None:
-        self.take_screenshot()
-        model = init_model()
-        previous_fen = None
-        current_fen = None
+        image = self.image_to_array()
+        self.current_fen = predict_fen_from_image(image, self.model).strip(" ")
+        if self.previous_fen == self.current_fen:
+            time.sleep(0.02)
+            return
 
-        moves_counter = 0 if self.play_color == "white" else 1
-        white_on_move = self.play_color == "white"
-        while True:
-            if self.stop_thread:
-                return
+        if self.previous_fen is None:
+            self.previous_fen = self.current_fen
+            return
 
-            image = self.image_to_array()
-            current_fen = predict_fen_from_image(image, model).strip(" ")
-            if previous_fen == current_fen:
-                time.sleep(0.02)
-                continue
+        tmp_img = image = self.image_to_array()
+        if self.current_fen != predict_fen_from_image(tmp_img, self.model).strip(" "):
+            return
 
-            if previous_fen is None:
-                previous_fen = current_fen
-                continue
-
-            tmp_img = image = self.image_to_array()
-            if current_fen != predict_fen_from_image(tmp_img, model).strip(" "):
-                continue
-
+        try:
+            move = get_diff_move(fen_to_list(self.previous_fen), fen_to_list(self.current_fen), self.white_on_move)
+            self.save_screenshot()
+        except InvalidMove:
             try:
-                move = get_diff_move(fen_to_list(previous_fen), fen_to_list(current_fen), white_on_move)
-                self.save_screenshot()
-            except InvalidMove:
-                try:
-                    image = self.image_to_array()
-                    current_fen = predict_fen_from_image(image, model).strip(" ")
-                    move = get_diff_move(fen_to_list(previous_fen), fen_to_list(current_fen), white_on_move)
-                except Exception:
-                    raise
-            except Exception as exc:
-                msg = Message(f"Invalid move: {str(exc)}", LogLevel.ERROR)
-                LogQueue.send(msg)
-                continue
+                image = self.image_to_array()
+                self.current_fen = predict_fen_from_image(image, self.model).strip(" ")
+                move = get_diff_move(fen_to_list(self.previous_fen), fen_to_list(self.current_fen), self.white_on_move)
+            except Exception:
+                raise
+        except Exception as exc:
+            LogQueue.send(Message(f"Invalid move: {str(exc)}", LogLevel.ERROR))
+            return
 
-            moves_counter += 1
+        self.moves_counter += 1
 
-            try:
-                self.stockfish.make_moves_from_current_position([move])
-                best_move = self.stockfish.get_best_move()
-                # TODO Show which exactly piece should move
-                evaluation = self.stockfish.get_evaluation()
+        try:
+            self.stockfish.make_moves_from_current_position([move])
+            best_move = self.stockfish.get_best_move()
+            # TODO Show which exactly piece should move
+            evaluation = self.stockfish.get_evaluation()
 
-                EvaluationQueue.send(evaluation)
+            EvaluationQueue.send(evaluation)
 
-                # doesnt show opponent's best moves
-                if moves_counter % 2 == 0:
-                    msg_dict: t.StatisticsDict = {
-                        "wdl_stats": self.stockfish.get_wdl_stats(),
-                        "top_moves": self.__translate_top_moves(self.stockfish.get_top_moves(3)),
-                        "best_move": self.__get_piece_from_position(best_move),
-                    }
-                    MovesQueue.send(msg_dict)
-                    # TODO add arrows to img
+            # doesnt show opponent's best moves
+            if self.moves_counter % 2 == 0:
+                msg_dict: t.StatisticsDict = {
+                    "wdl_stats": self.stockfish.get_wdl_stats(),
+                    "top_moves": self.__translate_top_moves(self.stockfish.get_top_moves(3)),
+                    "best_move": self.__get_piece_from_position(best_move),
+                }
+                MovesQueue.send(msg_dict)
+                # TODO add arrows to img
 
-            except Exception as err:
-                msg = Message(str(err), LogLevel.ERROR)
-                LogQueue.send(msg)
+        except Exception as err:
+            LogQueue.send(Message(str(err), LogLevel.ERROR))
 
-            previous_fen = current_fen
+        self.previous_fen = self.current_fen
 
     def start_scaning_thread(self):
         if not self.board_coords:
-            msg = Message("Get board coordinates first", LogLevel.ERROR)
-            LogQueue.send(msg)
+            LogQueue.send(Message("Get board coordinates first", LogLevel.ERROR))
             return
 
-        msg = Message("Started scanning board", LogLevel.SUCCESS)
-        LogQueue.send(msg)
-        self._thread_scanning = Thread(target=self.scan_screen)
-        self._thread_scanning.start()
+        LogQueue.send(Message("Started scanning board", LogLevel.SUCCESS))
+
+        self.take_screenshot()  # initial screenshot
+        self._load_stockfish()
+        self.model = init_model()
+        self.previous_fen = None
+        self.current_fen = None
+        self.moves_counter = 0 if self.play_color == "white" else 1
+        self.white_on_move = self.play_color == "white"
+
+        self.thread = Thread(self.scan_screen).start()
 
     def stop_scaning_thread(self):
-        if not self._thread_scanning:
-            msg = Message("You have to start scanning first", LogLevel.ERROR)
-            LogQueue.send(msg)
+        if not self.thread:
+            LogQueue.send(Message("You have to start scanning first", LogLevel.ERROR))
             return
 
-        msg = Message("Stopped scanning board", LogLevel.ERROR)
-        LogQueue.send(msg)
-        self.stop_thread = True
-        self._thread_scanning.join()
+        LogQueue.send(Message("Stopped scanning board", LogLevel.ERROR))
+
+        self.thread.stop()
 
     def toggle_color(self) -> str:
         if self.play_color == "white":

@@ -1,9 +1,7 @@
-import time
-from threading import Thread
-
 import customtkinter as ctk
 
 from src.log import LogLevel, LogQueue, Message
+from src.utils.thread import QueueThread
 
 
 class LogBox(ctk.CTkTextbox):
@@ -15,7 +13,7 @@ class LogBox(ctk.CTkTextbox):
         self.tag_config(LogLevel.WARNING, foreground="yellow")
 
         self.configure(state="disabled")
-        self.start_fetch_queue()
+        self.thread = QueueThread(queue=LogQueue, redirect_data=self.add_log).start()
 
     def clear_logs(self) -> None:
         self.configure(state="normal")
@@ -27,16 +25,3 @@ class LogBox(ctk.CTkTextbox):
         self.insert(ctk.END, message.body + "\n", message.level)
         self.yview(ctk.END)
         self.configure(state="disabled")
-
-    def fetch_queue(self):
-        while True:
-            try:
-                if message := LogQueue.recv():
-                    self.add_log(message)
-            except IndexError:
-                pass
-            time.sleep(0.1)
-
-    def start_fetch_queue(self):
-        t = Thread(target=self.fetch_queue)
-        t.start()
