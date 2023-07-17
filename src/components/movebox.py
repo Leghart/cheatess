@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import time
 from typing import TYPE_CHECKING
 
 import customtkinter as ctk
@@ -33,7 +32,10 @@ class MoveBox(ctk.CTkTextbox):
     def _set_layout(self, msg_dict: t.StatisticsDict) -> str:
         top_moves_msg = ""
         for batch in msg_dict["top_moves"]:
-            top_moves_msg += f"\n{round(batch['evaluation']/100,1)}: {batch['move']}"
+            if "M" in str(batch["evaluation"]):
+                top_moves_msg += f"\n{batch['evaluation']}: {batch['move']}"
+            else:
+                top_moves_msg += f"\n{round(batch['evaluation']/100,1)}: {batch['move']}"
 
         msg = f"""
 Best move: {msg_dict['best_move']}

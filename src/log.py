@@ -1,19 +1,17 @@
 from __future__ import annotations
 
 import queue
-from enum import StrEnum, auto
+from enum import StrEnum
 from typing import Optional, Self, TypeVar
-
-from stockfish import Stockfish
 
 T = TypeVar("T")
 
 
 class LogLevel(StrEnum):
-    SUCCESS = auto()
-    ERROR = auto()
-    WARNING = auto()
-    INFO = auto()
+    SUCCESS = "success"
+    ERROR = "error"
+    WARNING = "warning"
+    INFO = "info"
 
 
 class Message:

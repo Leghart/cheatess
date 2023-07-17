@@ -1,9 +1,9 @@
 import time
-from typing import Literal, Optional
+from enum import StrEnum
+from typing import Optional
 
 import numpy as np
 import pyautogui
-from keras.models import Model as KerasModel
 from stockfish import Stockfish
 
 import src.utils.types as t
@@ -11,8 +11,7 @@ from src.cnn.model import init_model, predict_fen_from_image
 from src.log import EvaluationQueue, LogLevel, LogQueue, Message, MovesQueue
 from src.utils.board import InvalidMove, fen_to_list, get_diff_move
 from src.utils.cache_loader import Cache
-
-# from threading import Thread
+from src.utils.image_modifier import ImageModifier
 from src.utils.thread import Thread
 
 PIECES = {
@@ -31,6 +30,11 @@ PIECES = {
 }
 
 
+class PlayColor(StrEnum):
+    BLACK = "black"
+    WHITE = "white"
+
+
 def print_board(fen: str):
     for row in fen.split("/"):
         for p in row:
@@ -44,10 +48,11 @@ def print_board(fen: str):
 
 class Engine:
     def __init__(self):
+        self._image_modifier = ImageModifier()
         self._board_coords = None
         self.thread: Optional[Thread] = None
         self.stop_thread: bool = False
-        self.play_color: Literal["white", "black"] = "white"
+        self.play_color: PlayColor = PlayColor.WHITE
         self._load_stockfish()
 
     def take_screenshot(self):
@@ -66,7 +71,7 @@ class Engine:
         image = self.image_to_array()
         self.current_fen = predict_fen_from_image(image, self.model).strip(" ")
         if self.previous_fen == self.current_fen:
-            time.sleep(0.02)
+            time.sleep(0.01)
             return
 
         if self.previous_fen is None:
@@ -96,25 +101,28 @@ class Engine:
         try:
             self.stockfish.make_moves_from_current_position([move])
             best_move = self.stockfish.get_best_move()
-            # TODO Show which exactly piece should move
             evaluation = self.stockfish.get_evaluation()
 
             EvaluationQueue.send(evaluation)
 
             # doesnt show opponent's best moves
-            if self.moves_counter % 2 == 0:
+            if not self.first_move and self.moves_counter % 2 == 0:
                 msg_dict: t.StatisticsDict = {
                     "wdl_stats": self.stockfish.get_wdl_stats(),
                     "top_moves": self.__translate_top_moves(self.stockfish.get_top_moves(3)),
                     "best_move": self.__get_piece_from_position(best_move),
                 }
                 MovesQueue.send(msg_dict)
-                # TODO add arrows to img
+                self._current_board = self._image_modifier.draw(
+                    best_move[:2], best_move[2:], white_on_move=self.white_on_move
+                )
+                self.save_screenshot()
 
         except Exception as err:
             LogQueue.send(Message(str(err), LogLevel.ERROR))
 
         self.previous_fen = self.current_fen
+        self.first_move = False
 
     def start_scaning_thread(self):
         if not self.board_coords:
@@ -128,8 +136,9 @@ class Engine:
         self.model = init_model()
         self.previous_fen = None
         self.current_fen = None
-        self.moves_counter = 0 if self.play_color == "white" else 1
-        self.white_on_move = self.play_color == "white"
+        self.first_move = True
+        self.moves_counter = 0 if self.play_color == PlayColor.WHITE else -1
+        self.white_on_move = self.play_color == PlayColor.WHITE
 
         self.thread = Thread(self.scan_screen).start()
 
@@ -142,12 +151,11 @@ class Engine:
 
         self.thread.stop()
 
-    def toggle_color(self) -> str:
-        if self.play_color == "white":
-            self.play_color = "black"
+    def toggle_color(self) -> PlayColor:
+        if self.play_color == PlayColor.WHITE:
+            self.play_color = PlayColor.BLACK
         else:
-            self.play_color = "white"
-
+            self.play_color = PlayColor.WHITE
         return self.play_color
 
     @property
@@ -178,11 +186,11 @@ class Engine:
             batch: t.FinalTopMoves = {}
             batch["move"] = self.__get_piece_from_position(top_move["Move"])
 
-            if top_move["Mate"]:
-                if (cp := top_move["Centipawn"]) > 0:
-                    batch["evaluation"] = f"M{cp}"
+            if mate := top_move["Mate"]:
+                if mate > 0:
+                    batch["evaluation"] = f"M{mate}"
                 else:
-                    batch["evaluation"] = f"-M{abs(cp)}"
+                    batch["evaluation"] = f"-M{abs(mate)}"
             else:
                 batch["evaluation"] = top_move["Centipawn"]
 
