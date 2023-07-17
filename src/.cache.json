@@ -1,1 +1,1 @@
-{"stockfish_engine_path": "/home/leghart/projects/chessify_utils/stockfish_15.1_linux_x64/stockfish-ubuntu-20.04-x86-64", "appearance_mode": "dark", "level": 1950, "time_thinking": 1, "depth": 15, "hash": 16, "threads": 1}
+{"stockfish_engine_path": "/home/leghart/projects/chessify_utils/stockfish_15.1_linux_x64/stockfish-ubuntu-20.04-x86-64", "appearance_mode": "dark", "level": 1950, "time_thinking": 1, "depth": 1, "hash": 16, "threads": 1}

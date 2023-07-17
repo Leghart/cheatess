@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import os
 import tkinter as tk
 from typing import TYPE_CHECKING
 
 import customtkinter as ctk
 
 from src.components.logbox import LogBox
-from src.utils.engine import Engine
+from src.utils.engine import Engine, PlayColor
 from src.utils.snippet_machine import SnippetMachine
 
 if TYPE_CHECKING:
@@ -32,14 +31,14 @@ class SideBar(ctk.CTkFrame):
         self.undo_move_button = ctk.CTkButton(self, text="Undo move")
         self.undo_move_button.grid(row=1, column=0, padx=20, pady=10)
 
-        self.current_color_button = ctk.CTkButton(
+        self._color: PlayColor = tk.StringVar(value=PlayColor.WHITE.value)
+        self.current_color_switch = ctk.CTkSwitch(
             self,
-            text=f"Play as: {self.engine_handler.play_color}",
-            command=self._change_color,
-            fg_color=self.engine_handler.play_color,
-            text_color="black",
+            text="White/Black",
+            variable=self._color,
+            command=self.engine_handler.toggle_color,
         )
-        self.current_color_button.grid(row=1, column=1, padx=20, pady=10)
+        self.current_color_switch.grid(row=1, column=1, padx=20, pady=10)
 
         self.scan_screen_button = ctk.CTkButton(self, text="Get board coordinates", command=self._create_screen_canvas)
         self.scan_screen_button.grid(row=3, column=0, padx=20, pady=10)
@@ -58,15 +57,6 @@ class SideBar(ctk.CTkFrame):
             self, text="Clear logs", command=self.logbox.clear_logs, text_color="black", fg_color="white"
         )
         self.clear_logs_button.grid(row=6, column=0, columnspan=2, sticky="nsew", padx=20, pady=10)
-
-    def _change_color(self):
-        new_color = self.engine_handler.toggle_color()
-        self.current_color_button.configure(text=f"Play as: {new_color}")
-
-        if new_color == "white":
-            self.current_color_button.configure(text_color="black", fg_color=new_color)
-        else:
-            self.current_color_button.configure(text_color="white", fg_color=new_color)
 
     def _create_screen_canvas(self):
         self.master_screen.deiconify()

@@ -21,6 +21,7 @@ screeninfo = "*"
 ruff = "*"
 black = "*"
 isort = "*"
+mypy = "*"
 
 [requires]
 python_version = "3.11.2"
