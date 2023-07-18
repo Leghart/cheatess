@@ -28,8 +28,8 @@ class SideBar(ctk.CTkFrame):
 
         self.grid(row=0, column=0, rowspan=30, sticky="nsew")
 
-        self.undo_move_button = ctk.CTkButton(self, text="Undo move")
-        self.undo_move_button.grid(row=1, column=0, padx=20, pady=10)
+        self.scan_screen_button = ctk.CTkButton(self, text="Scan board", command=self._create_screen_canvas)
+        self.scan_screen_button.grid(row=1, column=0, padx=20, pady=10)
 
         self._color: PlayColor = tk.StringVar(value=PlayColor.WHITE.value)
         self.current_color_switch = ctk.CTkSwitch(
@@ -40,17 +40,16 @@ class SideBar(ctk.CTkFrame):
         )
         self.current_color_switch.grid(row=1, column=1, padx=20, pady=10)
 
-        self.scan_screen_button = ctk.CTkButton(self, text="Get board coordinates", command=self._create_screen_canvas)
-        self.scan_screen_button.grid(row=3, column=0, padx=20, pady=10)
-
         self.start_scanning_button = ctk.CTkButton(
             self, text="Start scanning", command=self.engine_handler.start_scaning_thread, fg_color="green"
         )
-        self.start_scanning_button.grid(row=4, column=0, padx=20, pady=10)
+        self.start_scanning_button.grid(row=2, column=0, padx=20, pady=10)
+        self.start_scanning_button.configure(state="" if self.engine_handler.is_loaded_coords else "disabled")
         self.stop_scanning_button = ctk.CTkButton(
             self, text="Stop scanning", command=self.__stop_scanning, fg_color="red"
         )
-        self.stop_scanning_button.grid(row=4, column=1, padx=20, pady=10)
+        self.stop_scanning_button.grid(row=2, column=1, padx=20, pady=10)
+        self.stop_scanning_button.configure(state="normal" if self.engine_handler.is_loaded_coords else "disabled")
 
         self.logbox = LogBox(self)
         self.clear_logs_button = ctk.CTkButton(
@@ -94,6 +93,8 @@ class SideBar(ctk.CTkFrame):
             return
 
         self.engine_handler.board_coords = self.snippet.get_frame()
+        self.stop_scanning_button.configure(state="normal" if self.engine_handler.is_loaded_coords else "disabled")
+        self.start_scanning_button.configure(state="normal" if self.engine_handler.is_loaded_coords else "disabled")
         self.engine_handler.take_screenshot()
         self.engine_handler.save_screenshot()
         self.master.tabview.scanning_view.update_board_with_image("current_board.png")

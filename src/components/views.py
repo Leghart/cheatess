@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Literal, TypedDict
 import customtkinter as ctk
 from PIL import Image, ImageTk
 
+from src.components.modals import HelpModal
 from src.components.movebox import MoveBox
 from src.log import EvaluationQueue, LogLevel, LogQueue, Message
 from src.utils.cache_loader import Cache
@@ -218,3 +219,9 @@ class GeneralSettingsView(ctk.CTkFrame):
             command=lambda nmode: ctk.set_appearance_mode(nmode),
         )
         appearance_mode_optionemenu.grid(row=2, column=0, padx=20, pady=(10, 10))
+
+        self.show_help_button = ctk.CTkButton(self.master.tab("General"), text="Show help", command=self.__show_help)
+        self.show_help_button.grid(row=3, column=0)
+
+    def __show_help(self):
+        HelpModal(self.master.tab("General"))

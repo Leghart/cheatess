@@ -55,6 +55,10 @@ class Engine:
         self.play_color: PlayColor = PlayColor.WHITE
         self._load_stockfish()
 
+    @property
+    def is_loaded_coords(self):
+        return self.board_coords is not None
+
     def take_screenshot(self):
         x1, y1, x2, y2 = self.board_coords
         image = pyautogui.screenshot(region=(x1, y1, x2, y2))
