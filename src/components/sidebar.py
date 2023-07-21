@@ -31,15 +31,6 @@ class SideBar(ctk.CTkFrame):
         self.scan_screen_button = ctk.CTkButton(self, text="Scan board", command=self._create_screen_canvas)
         self.scan_screen_button.grid(row=1, column=0, padx=20, pady=10)
 
-        self._color: PlayColor = tk.StringVar(value=PlayColor.WHITE.value)
-        self.current_color_switch = ctk.CTkSwitch(
-            self,
-            text="White/Black",
-            variable=self._color,
-            command=self.engine_handler.toggle_color,
-        )
-        self.current_color_switch.grid(row=1, column=1, padx=20, pady=10)
-
         self.start_scanning_button = ctk.CTkButton(
             self, text="Start scanning", command=self.engine_handler.start_scaning_thread, fg_color="green"
         )
