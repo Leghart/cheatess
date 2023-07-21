@@ -71,9 +71,26 @@ class Engine:
         self.take_screenshot()
         return np.array(self._current_board)
 
+    def __detect_play_color(self) -> PlayColor:
+        """Detect player pieces color.
+
+        If first row starts with 'R' it means that opponent has white
+        pieces (you play as black).
+        """
+        if self.current_fen.startswith("R"):
+            return PlayColor.BLACK
+
+        return PlayColor.WHITE
+
     def scan_screen(self) -> None:
         image = self.image_to_array()
         self.current_fen = predict_fen_from_image(image, self.model).strip(" ")
+
+        if self.first_move:
+            self.play_color = self.__detect_play_color()
+            self.moves_counter = 0 if self.play_color == PlayColor.WHITE else -1
+            self.white_on_move = self.play_color == PlayColor.WHITE
+
         if self.previous_fen == self.current_fen:
             time.sleep(0.01)
             return
@@ -141,8 +158,8 @@ class Engine:
         self.previous_fen = None
         self.current_fen = None
         self.first_move = True
-        self.moves_counter = 0 if self.play_color == PlayColor.WHITE else -1
-        self.white_on_move = self.play_color == PlayColor.WHITE
+        # self.moves_counter = 0 if self.play_color == PlayColor.WHITE else -1
+        # self.white_on_move = self.play_color == PlayColor.WHITE
 
         self.thread = Thread(self.scan_screen).start()
 
@@ -154,13 +171,6 @@ class Engine:
         LogQueue.send(Message("Stopped scanning board", LogLevel.ERROR))
 
         self.thread.stop()
-
-    def toggle_color(self) -> PlayColor:
-        if self.play_color == PlayColor.WHITE:
-            self.play_color = PlayColor.BLACK
-        else:
-            self.play_color = PlayColor.WHITE
-        return self.play_color
 
     @property
     def board_coords(self):
