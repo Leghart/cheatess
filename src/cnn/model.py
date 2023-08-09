@@ -13,7 +13,7 @@ SQUARE_SIZE = 40
 
 
 def get_models_names() -> list[str]:
-    base_path = Path() / "trained_models"
+    base_path = Path() / "models"
 
     names = os.listdir(base_path / "custom") or os.listdir(base_path / "default")
 
@@ -24,7 +24,7 @@ def get_models_names() -> list[str]:
 def _load_all_models(names: list[str]) -> list[Any]:
     models = []
     # TODO: TMP
-    path_to_models = "./trained_models/default/"
+    path_to_models = "./models/default/"
     for model_name in names:
         models.append(
             load_model(

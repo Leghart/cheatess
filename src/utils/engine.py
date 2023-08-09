@@ -106,6 +106,7 @@ class Engine:
         try:
             move = get_diff_move(fen_to_list(self.previous_fen), fen_to_list(self.current_fen), self.white_on_move)
             self.save_screenshot()
+
         except InvalidMove:
             try:
                 image = self.image_to_array()
@@ -113,6 +114,7 @@ class Engine:
                 move = get_diff_move(fen_to_list(self.previous_fen), fen_to_list(self.current_fen), self.white_on_move)
             except Exception:
                 raise
+
         except Exception as exc:
             LogQueue.send(Message(f"Invalid move: {str(exc)}", LogLevel.ERROR))
             return
@@ -158,10 +160,8 @@ class Engine:
         self.previous_fen = None
         self.current_fen = None
         self.first_move = True
-        # self.moves_counter = 0 if self.play_color == PlayColor.WHITE else -1
-        # self.white_on_move = self.play_color == PlayColor.WHITE
 
-        self.thread = Thread(self.scan_screen).start()
+        self.thread = Thread(name="ScanThread", target=self.scan_screen).start()
 
     def stop_scaning_thread(self):
         if not self.thread:

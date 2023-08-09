@@ -13,7 +13,7 @@ class LogBox(ctk.CTkTextbox):
         self.tag_config(LogLevel.WARNING, foreground="yellow")
 
         self.configure(state="disabled")
-        self.thread = QueueThread(queue=LogQueue, redirect_data=self.add_log).start()
+        self.thread = QueueThread(name="LogBoxThread", queue=LogQueue, redirect_data=self.add_log).start()
 
     def clear_logs(self) -> None:
         self.configure(state="normal")

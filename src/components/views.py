@@ -36,7 +36,9 @@ class ScanningView(ctk.CTkFrame):
         self.slider_progressbar_frame = ctk.CTkFrame(self.tab, fg_color="transparent")
         self.slider_progressbar_frame.grid(row=1, column=0)
 
-        self.thread_update_evaluation = QueueThread(EvaluationQueue, self._update_evalbar).start()
+        self.thread_update_evaluation = QueueThread(
+            name="EvaluationThread", queue=EvaluationQueue, redirect_data=self._update_evalbar
+        ).start()
 
         self.evalbar_label = ctk.CTkLabel(self.tab, text="0.0")
         self.evalbar_label.grid(row=1, column=0)
@@ -45,8 +47,15 @@ class ScanningView(ctk.CTkFrame):
         self.evalbar.set(0.5)
 
         self.movebox = MoveBox(self.tab, view=self, engine=engine_handler)
-        self.thread_update_board = Thread(
-            self.update_board_with_image,
+
+    @property
+    def current_thread_board_image(self):
+        return self.__thread_update_board
+
+    def create_updating_image_thread(self) -> None:
+        self.__thread_update_board = Thread(
+            name="UpdateBoardThread",
+            target=self.update_board_with_image,
             path_to_img="current_board.png",
         ).start()
 
@@ -70,7 +79,7 @@ class ScanningView(ctk.CTkFrame):
             image_tk = ImageTk.PhotoImage(image)
             time.sleep(0.2)
             self.board_visual.configure(image=image_tk)
-        except OSError:
+        except (OSError, SyntaxError):
             pass
 
 

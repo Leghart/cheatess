@@ -35,4 +35,3 @@ class ImageModifier:
         )  # to
 
         return current_board
-        # current_board.save("/home/leghart/projects/cheatess/images/current_board.png")
