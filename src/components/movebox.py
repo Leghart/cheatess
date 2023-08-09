@@ -22,7 +22,7 @@ class MoveBox(ctk.CTkTextbox):
         self.grid(row=3, column=0, padx=20)
         self.configure(state="disabled")
 
-        self.thread = QueueThread(queue=MovesQueue, redirect_data=self.add_log).start()
+        self.thread = QueueThread(name="MoveBoxThread", queue=MovesQueue, redirect_data=self.add_log).start()
 
     def clear_logs(self) -> None:
         self.configure(state="normal")

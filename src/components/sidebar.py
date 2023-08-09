@@ -88,7 +88,7 @@ class SideBar(ctk.CTkFrame):
         self.start_scanning_button.configure(state="normal" if self.engine_handler.is_loaded_coords else "disabled")
         self.engine_handler.take_screenshot()
         self.engine_handler.save_screenshot()
-        self.master.tabview.scanning_view.update_board_with_image("current_board.png")
+        self.master.tabview.scanning_view.create_updating_image_thread()
 
         self.snip_surface.destroy()
         self.master_screen.withdraw()
@@ -98,5 +98,6 @@ class SideBar(ctk.CTkFrame):
 
     def __stop_scanning(self):
         self.engine_handler.stop_scaning_thread()
-        self.master.tabview.scanning_view.thread_update_board.stop()
+        self.master.tabview.scanning_view.current_thread_board_image.stop()
         self.master.tabview.scanning_view.update_board_with_image()
+        self.master.tabview.scanning_view.movebox.clear_logs()
