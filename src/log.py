@@ -15,12 +15,19 @@ class LogLevel(StrEnum):
 
 
 class Message:
+    """Class to store message data with color information."""
+
     def __init__(self, body: str, level: LogLevel = LogLevel.INFO):
         self.body = body
         self.level = level
 
 
 class QMeta(type):
+    """Metaclass to store every queue in class attribute.
+
+    Allows to get data from queue by class, not instance.
+    """
+
     queues: dict[str, queue.Queue] = {}
 
     def __new__(cls, *args, **kwargs) -> Self:
@@ -33,6 +40,11 @@ class QMeta(type):
 
 
 class BaseQueue(metaclass=QMeta):
+    """Abstract base queue.
+
+    This class should be always overriden to get a specific, named queue.
+    """
+
     @classmethod
     def recv(cls) -> Optional[T]:
         try:
@@ -46,12 +58,16 @@ class BaseQueue(metaclass=QMeta):
 
 
 class LogQueue(BaseQueue):
-    ...
+    """Queue of logs, errors from app."""
 
 
 class MovesQueue(BaseQueue):
-    ...
+    """Queue of best moves from stockifish analysis."""
 
 
 class EvaluationQueue(BaseQueue):
-    ...
+    """Queue of evaluation bar values stockifish."""
+
+
+class ImageArrayQueue(BaseQueue):
+    """Queue of board images (as arrays)."""

@@ -53,13 +53,30 @@ class ScanningView(ctk.CTkFrame):
         return self.__thread_update_board
 
     def create_updating_image_thread(self) -> None:
+        """Starts a thread which is updating board image."""
         self.__thread_update_board = Thread(
             name="UpdateBoardThread",
             target=self.update_board_with_image,
             path_to_img="current_board.png",
         ).start()
 
+    def update_board_with_image(self, path_to_img: str = "default.png") -> None:
+        """Updates board visualization by image stored in images/{path_to_img}."""
+        try:
+            image = Image.open(os.path.join("/home/leghart/projects/cheatess/images", path_to_img))
+            image_tk = ImageTk.PhotoImage(image)
+            time.sleep(0.1)
+            self.board_visual.configure(image=image_tk)
+        except (OSError, SyntaxError):
+            pass
+
     def _update_evalbar(self, eval_: _TEval) -> None:
+        """Changes stockfish's evaluation to bar representation.
+
+        Set an instance attribute with translated value from stockfish.
+        Stockfish's value is stored as integer [-n,n] in case of 'type' is
+        a centy-pawns and as integer in case check-mate's comming.
+        """
         if eval_["type"] == "cp":
             scaled_val = eval_["value"] / 100
             f = lambda x: 0.05 * x + 0.5
@@ -73,18 +90,13 @@ class ScanningView(ctk.CTkFrame):
                 self.evalbar.set(0)
                 self.evalbar_label.configure(text=f"-M{abs(val)}")
 
-    def update_board_with_image(self, path_to_img: str = "default.png"):
-        try:
-            image = Image.open(os.path.join("/home/leghart/projects/cheatess/images", path_to_img))
-            image_tk = ImageTk.PhotoImage(image)
-            time.sleep(0.2)
-            self.board_visual.configure(image=image_tk)
-        except (OSError, SyntaxError):
-            pass
 
-
-# TODO: validate ranges
 class StockfishView(ctk.CTkFrame):
+    """View of stockfish settings.
+
+    Allows to change stockifsh engine power (level), time thinking etc.
+    """
+
     def __init__(self, master: TabView, engine_handler: Engine):
         super().__init__(master, bg_color="red")
 
@@ -218,6 +230,11 @@ class StockfishView(ctk.CTkFrame):
 
 
 class GeneralSettingsView(ctk.CTkFrame):
+    """View of general settings, information.
+
+    Allows to change appearance, show help modal.
+    """
+
     def __init__(self, master: ctk.CTkTabview):
         super().__init__(master)
         appearance_mode_label = ctk.CTkLabel(self.master.tab("General"), text="Appearance Mode:", anchor="w")

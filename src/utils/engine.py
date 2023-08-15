@@ -2,14 +2,16 @@ import time
 from enum import StrEnum
 from typing import Optional
 
+import cv2
 import numpy as np
 import pyautogui
+from PIL.Image import Image
 from stockfish import Stockfish
 
 import src.utils.types as t
 from src.cnn.model import init_model, predict_fen_from_image
-from src.log import EvaluationQueue, LogLevel, LogQueue, Message, MovesQueue
-from src.utils.board import InvalidMove, fen_to_list, get_diff_move
+from src.log import EvaluationQueue, ImageArrayQueue, LogLevel, LogQueue, Message, MovesQueue
+from src.utils.board import fen_to_list, get_diff_move
 from src.utils.cache_loader import Cache
 from src.utils.image_modifier import ImageModifier
 from src.utils.thread import Thread
@@ -46,13 +48,26 @@ def print_board(fen: str):
     print("\n")
 
 
+def mse(img1: np.ndarray, img2: np.ndarray) -> float:
+    diff = cv2.subtract(img1, img2)
+    err = np.sum(diff**2)
+    mse = err / (400 * 400)
+    return mse
+
+
 class Engine:
     def __init__(self):
         self._image_modifier = ImageModifier()
         self._board_coords = None
-        self.thread: Optional[Thread] = None
+        self.scanning_thread: Optional[Thread] = None
+        self.calculating_thread: Optional[Thread] = None
         self.stop_thread: bool = False
         self.play_color: PlayColor = PlayColor.WHITE
+
+        self._prev_img: Optional[Image] = None
+        self._current_board_img: Optional[Image] = None
+        self._correct_moves: list[str] = []
+
         self._load_stockfish()
 
     @property
@@ -62,14 +77,10 @@ class Engine:
     def take_screenshot(self):
         x1, y1, x2, y2 = self.board_coords
         image = pyautogui.screenshot(region=(x1, y1, x2, y2))
-        self._current_board = image.resize((400, 400))
+        self._current_board_img = image.resize((400, 400))
 
-    def save_screenshot(self):
-        self._current_board.save("/home/leghart/projects/cheatess/images/current_board.png")
-
-    def image_to_array(self):
-        self.take_screenshot()
-        return np.array(self._current_board)
+    def save_board_image(self):
+        self._current_board_img.save("/home/leghart/projects/cheatess/images/current_board.png")
 
     def __detect_play_color(self) -> PlayColor:
         """Detect player pieces color.
@@ -82,8 +93,15 @@ class Engine:
 
         return PlayColor.WHITE
 
-    def scan_screen(self) -> None:
-        image = self.image_to_array()
+    def calculate(self) -> None:
+        if self.first_move:
+            image = np.array(self._current_board_img)
+        else:
+            image = ImageArrayQueue.recv()
+            if image is None:
+                time.sleep(0.5)
+                return
+
         self.current_fen = predict_fen_from_image(image, self.model).strip(" ")
 
         if self.first_move:
@@ -91,32 +109,29 @@ class Engine:
             self.moves_counter = 0 if self.play_color == PlayColor.WHITE else -1
             self.white_on_move = self.play_color == PlayColor.WHITE
 
-        if self.previous_fen == self.current_fen:
-            time.sleep(0.01)
-            return
+        self.first_move = False
 
         if self.previous_fen is None:
             self.previous_fen = self.current_fen
             return
 
-        tmp_img = image = self.image_to_array()
-        if self.current_fen != predict_fen_from_image(tmp_img, self.model).strip(" "):
-            return
-
         try:
             move = get_diff_move(fen_to_list(self.previous_fen), fen_to_list(self.current_fen), self.white_on_move)
-            self.save_screenshot()
+            self.save_board_image()
+        except IndexError:
+            # TODO? add retry?
+            print("======== RETRY ======")
+            self._load_stockfish()
+            self.stockfish.make_moves_from_current_position(self._correct_moves)
 
-        except InvalidMove:
-            try:
-                image = self.image_to_array()
-                self.current_fen = predict_fen_from_image(image, self.model).strip(" ")
-                move = get_diff_move(fen_to_list(self.previous_fen), fen_to_list(self.current_fen), self.white_on_move)
-            except Exception:
-                raise
+            self.take_screenshot()
+            self.current_fen = predict_fen_from_image(np.array(self._current_board_img), self.model).strip(" ")
+            move = get_diff_move(fen_to_list(self.previous_fen), fen_to_list(self.current_fen), self.white_on_move)
+            self.save_board_image()
 
         except Exception as exc:
-            LogQueue.send(Message(f"Invalid move: {str(exc)}", LogLevel.ERROR))
+            if msg := str(exc):
+                LogQueue.send(Message(f"Invalid move: {msg}", LogLevel.ERROR))
             return
 
         self.moves_counter += 1
@@ -125,29 +140,40 @@ class Engine:
             self.stockfish.make_moves_from_current_position([move])
             best_move = self.stockfish.get_best_move()
             evaluation = self.stockfish.get_evaluation()
-
             EvaluationQueue.send(evaluation)
 
-            # doesnt show opponent's best moves
-            if not self.first_move and self.moves_counter % 2 == 0:
+            if self.moves_counter % 2 == 0:
                 msg_dict: t.StatisticsDict = {
                     "wdl_stats": self.stockfish.get_wdl_stats(),
                     "top_moves": self.__translate_top_moves(self.stockfish.get_top_moves(3)),
                     "best_move": self.__get_piece_from_position(best_move),
                 }
                 MovesQueue.send(msg_dict)
-                self._current_board = self._image_modifier.draw(
+                self._current_board_img = self._image_modifier.draw(
                     best_move[:2], best_move[2:], white_on_move=self.white_on_move
                 )
-                self.save_screenshot()
+                self.save_board_image()
 
         except Exception as err:
             LogQueue.send(Message(str(err), LogLevel.ERROR))
 
+        self._correct_moves.append(move)
         self.previous_fen = self.current_fen
         self.first_move = False
 
-    def start_scaning_thread(self):
+    def scan(self) -> None:
+        self.take_screenshot()
+        if self._prev_img is None:
+            self._prev_img = self._current_board_img
+
+        prev, curr = np.array(self._prev_img), np.array(self._current_board_img)
+        if (mse(prev, curr)) != 0.0:
+            ImageArrayQueue.send(curr)
+
+        self._prev_img = self._current_board_img
+        time.sleep(0.2)
+
+    def start_scaning(self):
         if not self.board_coords:
             LogQueue.send(Message("Get board coordinates first", LogLevel.ERROR))
             return
@@ -161,16 +187,18 @@ class Engine:
         self.current_fen = None
         self.first_move = True
 
-        self.thread = Thread(name="ScanThread", target=self.scan_screen).start()
+        self.scanning_thread = Thread(name="ScanThread", target=self.scan).start()
+        self.calculating_thread = Thread(name="CalcThread", target=self.calculate).start()
 
     def stop_scaning_thread(self):
-        if not self.thread:
+        if not self.scanning_thread and not self.calculating_thread:
             LogQueue.send(Message("You have to start scanning first", LogLevel.ERROR))
             return
 
         LogQueue.send(Message("Stopped scanning board", LogLevel.ERROR))
 
-        self.thread.stop()
+        self.scanning_thread.stop()
+        self.calculating_thread.stop()
 
     @property
     def board_coords(self):

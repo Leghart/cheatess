@@ -13,6 +13,7 @@ _TMove = tuple[str, int]
 
 
 def fen_to_list(fen: str) -> list[str]:
+    """Changes FEN's from string to splitted string as list."""
     assert len(fen.split()) == 1, "FEN has to have only pieces representation!"
     _list = []
     for sign in fen:
@@ -29,6 +30,7 @@ def fen_to_list(fen: str) -> list[str]:
 
 
 def get_position_from_idx(idx: int, white_on_move: bool) -> _TMove:
+    """Changes field position index to common representation (a8, e4 etc)."""
     if white_on_move:
         return (IDX_TO_SIGN[idx % 8], -math.ceil((idx + 1) / 8) + 9)
 
