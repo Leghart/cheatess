@@ -3,6 +3,11 @@ from pathlib import Path
 
 
 class Singleton(type):
+    """Singleton design pattern.
+
+    Always uses the same instance of object.
+    """
+
     _instances = {}
 
     def __call__(cls, *args, **kwargs):
@@ -12,6 +17,14 @@ class Singleton(type):
 
 
 class Cache(metaclass=Singleton):
+    """Class which allows to save and load data from .cache.json file.
+
+    You can have access to key from json by using nested get items e.g.
+
+    >> cache = Cache()
+    >> cache["stockfish"]["level"] = 1900
+    """
+
     def __init__(self) -> None:
         self.__path = Path(__file__).parent.parent.resolve() / ".cache.json"
         f = open(self.__path)

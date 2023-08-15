@@ -16,6 +16,7 @@ tqdm = "*"
 pyautogui = "*"
 customtkinter = "*"
 screeninfo = "*"
+opencv-python = "*"
 
 [dev-packages]
 ruff = "*"

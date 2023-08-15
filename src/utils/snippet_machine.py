@@ -1,4 +1,6 @@
 class SnippetMachine:
+    """Represents a snippet which user use to designate an area where the board is placed."""
+
     def __init__(self) -> None:
         self.start_x = None
         self.start_y = None
@@ -6,6 +8,7 @@ class SnippetMachine:
         self.current_y = None
 
     def get_frame(self) -> tuple[int]:
+        """Convert created snippet frame to unified value."""
         if self.start_x <= self.current_x and self.start_y <= self.current_y:
             return (
                 self.start_x,

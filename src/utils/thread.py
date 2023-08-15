@@ -12,12 +12,10 @@ class Thread:
         self.__stop_event = threading.Event()
 
     def start(self) -> Self:
-        print("started: ", self.__target)
         self.__thread.start()
         return self
 
     def stop(self):
-        print("stopping: ", self.__target)
         self.__stop_event.set()
 
     def is_stopped(self) -> bool:
@@ -50,6 +48,6 @@ class QueueThread(Thread):
             try:
                 if result := self.__queue.recv():
                     self.__redirect_data(result)
-            except IndexError:
+            except Exception:
                 pass
             time.sleep(0.1)

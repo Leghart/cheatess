@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import customtkinter as ctk
 
 from src.components.logbox import LogBox
-from src.utils.engine import Engine, PlayColor
+from src.utils.engine import Engine
 from src.utils.snippet_machine import SnippetMachine
 
 if TYPE_CHECKING:
@@ -32,7 +32,7 @@ class SideBar(ctk.CTkFrame):
         self.scan_screen_button.grid(row=1, column=0, padx=20, pady=10)
 
         self.start_scanning_button = ctk.CTkButton(
-            self, text="Start scanning", command=self.engine_handler.start_scaning_thread, fg_color="green"
+            self, text="Start scanning", command=self.engine_handler.start_scaning, fg_color="green"
         )
         self.start_scanning_button.grid(row=2, column=0, padx=20, pady=10)
         self.start_scanning_button.configure(state="" if self.engine_handler.is_loaded_coords else "disabled")
@@ -87,7 +87,7 @@ class SideBar(ctk.CTkFrame):
         self.stop_scanning_button.configure(state="normal" if self.engine_handler.is_loaded_coords else "disabled")
         self.start_scanning_button.configure(state="normal" if self.engine_handler.is_loaded_coords else "disabled")
         self.engine_handler.take_screenshot()
-        self.engine_handler.save_screenshot()
+        self.engine_handler.save_board_image()
         self.master.tabview.scanning_view.create_updating_image_thread()
 
         self.snip_surface.destroy()

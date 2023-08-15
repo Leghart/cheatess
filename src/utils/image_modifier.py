@@ -2,6 +2,8 @@ from PIL import Image, ImageDraw
 
 
 class ImageModifier:
+    """Draws circles on the image in places where the piece has been moved and to where it should be."""
+
     WHITE_BOARD = {"a": 1, "b": 2, "c": 3, "d": 4, "e": 5, "f": 6, "g": 7, "h": 8}
     BLACK_BOARD = {"h": 1, "g": 2, "f": 3, "e": 4, "d": 5, "c": 6, "b": 7, "a": 8}
     SQUARE_SIZE = 50
