@@ -1,16 +1,16 @@
 import os
 
 from src.app import App
+from src.utils.path_manager import PathManager
 
 
 def cleanup():
-    if os.path.exists("/home/leghart/projects/cheatess/images/current_board.png"):
-        os.remove("/home/leghart/projects/cheatess/images/current_board.png")
+    if os.path.exists(PathManager.current_board_image):
+        os.remove(PathManager.current_board_image)
 
-    my_dir = "/home/leghart/projects/cheatess/"
-    for file in os.listdir(my_dir):
+    for file in os.listdir(PathManager.root):
         if file.startswith(".screenshot"):
-            os.remove(os.path.join(my_dir, file))
+            os.remove(os.path.join(PathManager.root, file))
 
 
 if __name__ == "__main__":

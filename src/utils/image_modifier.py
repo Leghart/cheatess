@@ -1,5 +1,7 @@
 from PIL import Image, ImageDraw
 
+from src.utils.path_manager import PathManager
+
 
 class ImageModifier:
     """Draws circles on the image in places where the piece has been moved and to where it should be."""
@@ -9,7 +11,7 @@ class ImageModifier:
     SQUARE_SIZE = 50
 
     def draw(self, from_: str, to_: str, white_on_move: bool) -> Image:
-        current_board = Image.open("/home/leghart/projects/cheatess/images/current_board.png")
+        current_board = Image.open(PathManager.current_board_image)
         draw = ImageDraw.Draw(current_board)
         actual_board = self.WHITE_BOARD if white_on_move else self.BLACK_BOARD
 

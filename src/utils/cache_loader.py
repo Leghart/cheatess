@@ -1,5 +1,6 @@
 import json
-from pathlib import Path
+
+from src.utils.path_manager import PathManager
 
 
 class Singleton(type):
@@ -26,8 +27,7 @@ class Cache(metaclass=Singleton):
     """
 
     def __init__(self) -> None:
-        self.__path = Path(__file__).parent.parent.resolve() / ".cache.json"
-        f = open(self.__path)
+        f = open(PathManager.cache)
         self.__cache = json.load(f)
         f.close()
 
@@ -45,6 +45,6 @@ class Cache(metaclass=Singleton):
         self.__save()
 
     def __save(self):
-        with open(self.__path, "w") as f:
+        with open(PathManager.cache, "w") as f:
             data = json.dumps(self.__cache)
             f.write(data)

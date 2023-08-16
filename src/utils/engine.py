@@ -14,6 +14,7 @@ from src.log import EvaluationQueue, ImageArrayQueue, LogLevel, LogQueue, Messag
 from src.utils.board import fen_to_list, get_diff_move
 from src.utils.cache_loader import Cache
 from src.utils.image_modifier import ImageModifier
+from src.utils.path_manager import PathManager
 from src.utils.thread import Thread
 
 PIECES = {
@@ -80,7 +81,7 @@ class Engine:
         self._current_board_img = image.resize((400, 400))
 
     def save_board_image(self):
-        self._current_board_img.save("/home/leghart/projects/cheatess/images/current_board.png")
+        self._current_board_img.save(PathManager.current_board_image)
 
     def __detect_play_color(self) -> PlayColor:
         """Detect player pieces color.
