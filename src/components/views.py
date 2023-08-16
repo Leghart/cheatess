@@ -13,6 +13,7 @@ from src.components.movebox import MoveBox
 from src.log import EvaluationQueue, LogLevel, LogQueue, Message
 from src.utils.cache_loader import Cache
 from src.utils.engine import Engine
+from src.utils.path_manager import PathManager
 from src.utils.thread import QueueThread, Thread
 
 if TYPE_CHECKING:
@@ -63,7 +64,7 @@ class ScanningView(ctk.CTkFrame):
     def update_board_with_image(self, path_to_img: str = "default.png") -> None:
         """Updates board visualization by image stored in images/{path_to_img}."""
         try:
-            image = Image.open(os.path.join("/home/leghart/projects/cheatess/images", path_to_img))
+            image = Image.open(os.path.join(PathManager.images, path_to_img))
             image_tk = ImageTk.PhotoImage(image)
             time.sleep(0.1)
             self.board_visual.configure(image=image_tk)
