@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import time
 from enum import StrEnum
 from typing import Optional
@@ -38,7 +40,7 @@ class PlayColor(StrEnum):
     WHITE = "white"
 
 
-def print_board(fen: str):
+def print_board(fen: str) -> None:
     for row in fen.split("/"):
         for p in row:
             if p.isdigit():
@@ -69,11 +71,9 @@ class Engine:
         self._current_board_img: Optional[Image] = None
         self._correct_moves: list[str] = []
 
-        self._load_stockfish()
-
-    @property
-    def is_loaded_coords(self):
-        return self.board_coords is not None
+        self.previous_fen: str = ""
+        self.current_fen: str = ""
+        self.first_move: bool = True
 
     def take_screenshot(self):
         x1, y1, x2, y2 = self.board_coords
@@ -83,18 +83,8 @@ class Engine:
     def save_board_image(self):
         self._current_board_img.save(PathManager.current_board_image)
 
-    def __detect_play_color(self) -> PlayColor:
-        """Detect player pieces color.
-
-        If first row starts with 'R' it means that opponent has white
-        pieces (you play as black).
-        """
-        if self.current_fen.startswith("R"):
-            return PlayColor.BLACK
-
-        return PlayColor.WHITE
-
     def calculate(self) -> None:
+        image: Optional[np.ndarray]
         if self.first_move:
             image = np.array(self._current_board_img)
         else:
@@ -112,7 +102,7 @@ class Engine:
 
         self.first_move = False
 
-        if self.previous_fen is None:
+        if not self.previous_fen:
             self.previous_fen = self.current_fen
             return
 
@@ -184,9 +174,10 @@ class Engine:
         self.take_screenshot()  # initial screenshot
         self._load_stockfish()
         self.model = init_model()
-        self.previous_fen = None
-        self.current_fen = None
-        self.first_move = True
+
+        self.previous_fen: str = ""
+        self.current_fen: str = ""
+        self.first_move: bool = True
 
         self.scanning_thread = Thread(name="ScanThread", target=self.scan).start()
         self.calculating_thread = Thread(name="CalcThread", target=self.calculate).start()
@@ -201,6 +192,15 @@ class Engine:
         self.scanning_thread.stop()
         self.calculating_thread.stop()
 
+    def update_parameters(self, level: int, time_thinking: int, depth: int, memory: int, threads: int):
+        config = {"UCI_Elo": level, "Minimum Thinking Time": time_thinking, "Hash": memory, "Threads": threads}
+        self.stockfish.update_engine_parameters(config)
+        self.stockfish.set_depth(depth)
+
+    @property
+    def is_loaded_coords(self):
+        return self.board_coords is not None
+
     @property
     def board_coords(self):
         return self._board_coords
@@ -208,11 +208,6 @@ class Engine:
     @board_coords.setter
     def board_coords(self, coords: tuple[int]) -> None:
         self._board_coords = coords
-
-    def update_parameters(self, level: int, time_thinking: int, depth: int, memory: int, threads: int):
-        config = {"UCI_Elo": level, "Minimum Thinking Time": time_thinking, "Hash": memory, "Threads": threads}
-        self.stockfish.update_engine_parameters(config)
-        self.stockfish.set_depth(depth)
 
     def _load_stockfish(self):
         path_to_engine = Cache()["stockfish_engine_path"]
@@ -226,7 +221,7 @@ class Engine:
         result = []
 
         for top_move in top_moves:
-            batch: t.FinalTopMoves = {}
+            batch: t.FinalTopMoves = {"move": "", "evaluation": ""}
             batch["move"] = self.__get_piece_from_position(top_move["Move"])
 
             if mate := top_move["Mate"]:
@@ -235,8 +230,19 @@ class Engine:
                 else:
                     batch["evaluation"] = f"-M{abs(mate)}"
             else:
-                batch["evaluation"] = top_move["Centipawn"]
+                batch["evaluation"] = str(top_move["Centipawn"])
 
             result.append(batch)
 
         return result
+
+    def __detect_play_color(self) -> PlayColor:
+        """Detect player pieces color.
+
+        If first row starts with 'R' it means that opponent has white
+        pieces (you play as black).
+        """
+        if self.current_fen.startswith("R"):
+            return PlayColor.BLACK
+
+        return PlayColor.WHITE

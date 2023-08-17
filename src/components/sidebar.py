@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import tkinter as tk
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Type
 
 import customtkinter as ctk
 
@@ -19,6 +19,7 @@ class SideBar(ctk.CTkFrame):
 
     def __init__(self, master: App):
         super().__init__(master, corner_radius=0)
+        self.master: App = master
 
         self.master_screen = tk.Toplevel(self)
         self.master_screen.withdraw()
@@ -66,7 +67,8 @@ class SideBar(ctk.CTkFrame):
 
     def __on_button_press(self, event):
         # Reset threads
-        self.engine_handler.thread = None
+        self.engine_handler.scanning_thread = None
+        self.engine_handler.calculating_thread = None
         self.engine_handler.board_coords = None
 
         self.snippet.start_x = self.snip_surface.canvasx(event.x)
@@ -82,7 +84,6 @@ class SideBar(ctk.CTkFrame):
     def __on_button_release(self, event):
         if not self.snippet.is_frame_set():
             return
-
         self.engine_handler.board_coords = self.snippet.get_frame()
         self.stop_scanning_button.configure(state="normal" if self.engine_handler.is_loaded_coords else "disabled")
         self.start_scanning_button.configure(state="normal" if self.engine_handler.is_loaded_coords else "disabled")

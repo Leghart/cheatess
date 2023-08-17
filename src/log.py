@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import queue
 from enum import StrEnum
-from typing import Optional, Self, TypeVar
+from typing import Any, Optional, Type, TypeVar
 
 T = TypeVar("T")
 
@@ -30,7 +30,7 @@ class QMeta(type):
 
     queues: dict[str, queue.Queue] = {}
 
-    def __new__(cls, *args, **kwargs) -> Self:
+    def __new__(cls, *args: Any, **kwargs: Any) -> Type[T]:
         new = super().__new__(cls, *args, **kwargs)
 
         if new not in cls.queues:
@@ -46,7 +46,7 @@ class BaseQueue(metaclass=QMeta):
     """
 
     @classmethod
-    def recv(cls) -> Optional[T]:
+    def recv(cls) -> Any:
         try:
             return cls.queues[cls.__name__].get(False)
         except queue.Empty:

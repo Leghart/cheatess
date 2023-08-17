@@ -70,8 +70,8 @@ def init_model() -> KerasModel:
     return model
 
 
-def predict_fen_from_image(image: str, model: KerasModel) -> str:
-    processed_image = process_image(image) if isinstance(image, str) else process_image_bytes(image)
+def predict_fen_from_image(image_array: np.ndarray, model: KerasModel) -> str:
+    processed_image = process_image_bytes(image_array)
     pred = model.predict(processed_image, verbose=0).argmax(axis=1).reshape(-1, 8, 8)
     fen = fen_from_onehot(pred[0])
 

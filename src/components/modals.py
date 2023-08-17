@@ -28,7 +28,7 @@ class HelpModal(ctk.CTkToplevel):
     def __init__(self, master):
         super().__init__(master, height=400, width=500)
         super(tk.Toplevel, self).title("Help")
-
+        self.master = master
         self.cache = Cache()
 
         self.info = ctk.CTkLabel(self, text=msg)

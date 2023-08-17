@@ -1,17 +1,22 @@
+from __future__ import annotations
+
 import json
+from typing import Any, Generic, Type, TypeVar
 
 from src.utils.path_manager import PathManager
 
+T = TypeVar("T")
 
-class Singleton(type):
+
+class Singleton(type, Generic[T]):
     """Singleton design pattern.
 
     Always uses the same instance of object.
     """
 
-    _instances = {}
+    _instances: dict[Singleton[T], T] = {}
 
-    def __call__(cls, *args, **kwargs):
+    def __call__(cls, *args: Any, **kwargs: Any) -> T:
         if cls not in cls._instances:
             cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
         return cls._instances[cls]
