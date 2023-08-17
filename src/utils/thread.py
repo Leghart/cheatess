@@ -1,6 +1,6 @@
 import threading
 import time
-from typing import Any, Callable, Self
+from typing import Any, Callable, Optional, Self, Type
 
 from src.log import BaseQueue
 
@@ -66,9 +66,9 @@ class QueueThread(Thread):
     def __init__(
         self,
         name: str,
-        queue: BaseQueue,
+        queue: Type[BaseQueue],
         redirect_data: Callable[..., Any],
-        custom_fetch_queue: Callable[..., None] = None,
+        custom_fetch_queue: Optional[Callable[..., None]] = None,
     ):
         """Initializes an instance with passed arguments.
 

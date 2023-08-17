@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 class MoveBox(ctk.CTkTextbox):
     def __init__(self, master: ctk.CTk, view: ScanningView, engine: Engine):
         super().__init__(master, height=200, width=600, corner_radius=0, font=("Helvetica", 22))
+        self.master = master
         self.parent = view
         self.engine_handler = engine
 
@@ -32,10 +33,10 @@ class MoveBox(ctk.CTkTextbox):
     def _set_layout(self, msg_dict: t.StatisticsDict) -> str:
         top_moves_msg = ""
         for batch in msg_dict["top_moves"]:
-            if "M" in str(batch["evaluation"]):
+            if "M" in batch["evaluation"]:
                 top_moves_msg += f"\n{batch['evaluation']}: {batch['move']}"
             else:
-                top_moves_msg += f"\n{round(batch['evaluation']/100,1)}: {batch['move']}"
+                top_moves_msg += f"\n{round(int(batch['evaluation'])/100,1)}: {batch['move']}"
 
         msg = f"""
 Best move: {msg_dict['best_move']}

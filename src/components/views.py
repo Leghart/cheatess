@@ -28,6 +28,8 @@ class _TEval(TypedDict):
 class ScanningView(ctk.CTkFrame):
     def __init__(self, master: TabView, engine_handler: Engine):
         super().__init__(master)
+        self.master = master
+
         self.tab = self.master.tab("Scanning")
 
         self.board_visual = ctk.CTkLabel(self.tab, text="")
@@ -100,6 +102,7 @@ class StockfishView(ctk.CTkFrame):
 
     def __init__(self, master: TabView, engine_handler: Engine):
         super().__init__(master, bg_color="red")
+        self.master = master
 
         self.tab = self.master.tab("Stockfish")
         self.engine_handler = engine_handler
@@ -238,6 +241,8 @@ class GeneralSettingsView(ctk.CTkFrame):
 
     def __init__(self, master: ctk.CTkTabview):
         super().__init__(master)
+        self.master = master
+
         appearance_mode_label = ctk.CTkLabel(self.master.tab("General"), text="Appearance Mode:", anchor="w")
         appearance_mode_label.grid(row=1, column=0, padx=20, pady=(10, 0))
         appearance_mode_optionemenu = ctk.CTkOptionMenu(

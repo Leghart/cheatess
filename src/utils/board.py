@@ -1,15 +1,36 @@
 import math
-from functools import reduce
+from dataclasses import dataclass
+from typing import Literal, cast
+
+
+@dataclass
+class MovedPiece:
+    idx: int
+    piece: str
 
 
 class InvalidMove(Exception):
     ...
 
 
-IDX_TO_SIGN = {0: "a", 1: "b", 2: "c", 3: "d", 4: "e", 5: "f", 6: "g", 7: "h"}
-BLACK_IDX_TO_SIGN = {7: "a", 6: "b", 5: "c", 4: "d", 3: "e", 2: "f", 1: "g", 0: "h"}
+_TPiece = Literal["p", "r", "n", "b", "k", "q", "P", "R", "N", "B", "K", "Q"]
+_TIdx = Literal[1]
+_TIdx.__dict__["__args__"] = list(range(64))
+_TCharPosition = Literal["a", "b", "c", "d", "e", "f", "g", "h"]
+_TIntPosition = Literal[1, 2, 3, 4, 5, 6, 7, 8]
+_TPostMove = tuple[_TCharPosition, _TIntPosition]
 
-_TMove = tuple[str, int]
+IDX_TO_SIGN: dict[int, str] = {0: "a", 1: "b", 2: "c", 3: "d", 4: "e", 5: "f", 6: "g", 7: "h"}
+BLACK_IDX_TO_SIGN: dict[int, str] = {
+    7: "a",
+    6: "b",
+    5: "c",
+    4: "d",
+    3: "e",
+    2: "f",
+    1: "g",
+    0: "h",
+}
 
 
 def fen_to_list(fen: str) -> list[str]:
@@ -29,61 +50,72 @@ def fen_to_list(fen: str) -> list[str]:
     return _list
 
 
-def get_position_from_idx(idx: int, white_on_move: bool) -> _TMove:
+def get_position_from_idx(idx: int, white_on_move: bool) -> _TPostMove:
     """Changes field position index to common representation (a8, e4 etc)."""
+
     if white_on_move:
-        return (IDX_TO_SIGN[idx % 8], -math.ceil((idx + 1) / 8) + 9)
+        char_position = IDX_TO_SIGN[idx % 8]
+        int_position = -math.ceil((idx + 1) / 8) + 9
 
-    return (BLACK_IDX_TO_SIGN[idx % 8], math.floor(idx / 8) + 1)
-
-
-def fit_board_to_move(
-    move1: _TMove, move2: _TMove, board1: list[str], board2: list[str], white_on_move: bool
-) -> tuple[_TMove, _TMove]:
-    """Return move_from, move_to"""
-    move1_piece, move1_idx = move1[0], move1[1]
-    move2_idx = move2[1]
-
-    if board1[move1_idx] == move1_piece and board2[move2_idx] == move1_piece and board2[move1_idx] == "":
-        move_from = get_position_from_idx(move1_idx, white_on_move)
-        move_to = get_position_from_idx(move2_idx, white_on_move)
     else:
-        move_from = get_position_from_idx(move2_idx, white_on_move)
-        move_to = get_position_from_idx(move1_idx, white_on_move)
+        char_position = BLACK_IDX_TO_SIGN[idx % 8]
+        int_position = math.floor(idx / 8) + 1
+
+    return (cast(_TCharPosition, char_position), cast(_TIntPosition, int_position))
+
+
+def determine_move(
+    moved_from: MovedPiece, moved_to: MovedPiece, board1: list[str], board2: list[str], white_on_move: bool
+) -> tuple[_TPostMove, _TPostMove]:
+    """Determines a move by comparing the moved pieces and boards before and after the move."""
+    if (
+        board1[moved_from.idx] == moved_from.piece
+        and board2[moved_to.idx] == moved_from.piece
+        and board2[moved_from.idx] == ""
+    ):
+        move_from = get_position_from_idx(moved_from.idx, white_on_move)
+        move_to = get_position_from_idx(moved_to.idx, white_on_move)
+    else:
+        move_from = get_position_from_idx(moved_to.idx, white_on_move)
+        move_to = get_position_from_idx(moved_from.idx, white_on_move)
 
     return move_from, move_to
 
 
 def get_diff_move(board1: list[str], board2: list[str], white_on_move: bool) -> str:
-    moved_pieces: list[_TMove] = []
-    moved_from_to_save: _TMove = ()
-    moved_to_to_save: _TMove = ()
+    moved_pieces: list[MovedPiece] = []
 
     for idx, (p1, p2) in enumerate(zip(board1, board2), start=0):
         if p1 == p2:
             continue
 
-        moved_pieces.append((p1, idx) if p1 else (p2, idx))
+        moved_pieces.append(MovedPiece(piece=p1, idx=idx) if p1 else MovedPiece(piece=p2, idx=idx))
 
     if len(moved_pieces) <= 1:
         raise InvalidMove
 
     if len(moved_pieces) == 2:
-        moved_from_to_save, moved_to_to_save = fit_board_to_move(
+        moved_from_to_save, moved_to_to_save = determine_move(
             moved_pieces[0], moved_pieces[1], board1, board2, white_on_move
         )
 
     if len(moved_pieces) == 3:  # en passant
-        white_pawn_occured = reduce(lambda total, sublist: total + (1 if "P" in sublist else 0), moved_pieces, 0)
-        black_pawn_occured = reduce(lambda total, sublist: total + (1 if "p" in sublist else 0), moved_pieces, 0)
+        white_pawn_occured = 0
+        black_pawn_occured = 0
+
+        for piece in moved_pieces:
+            if piece.piece == "P":
+                white_pawn_occured += 1
+            if piece.piece == "p":
+                black_pawn_occured += 1
 
         if white_pawn_occured < black_pawn_occured:
-            pawn_move_idxes = [pos[1] for pos in moved_pieces if pos[0] == "p"]
+            pawn_move_idxes = [pos.idx for pos in moved_pieces if pos.piece == "p"]
             moved_from_to_save = get_position_from_idx(pawn_move_idxes[0], white_on_move)
             moved_to_to_save = get_position_from_idx(pawn_move_idxes[1], white_on_move)
 
         else:
-            pawn_move_idxes = sorted([pos[1] for pos in moved_pieces if pos[0] == "P"])[::-1]
+            pawn_move_idxes = sorted([pos.idx for pos in moved_pieces if pos.piece == "P"])[::-1]
             moved_from_to_save = get_position_from_idx(pawn_move_idxes[0], white_on_move)
             moved_to_to_save = get_position_from_idx(pawn_move_idxes[1], white_on_move)
 
@@ -91,8 +123,8 @@ def get_diff_move(board1: list[str], board2: list[str], white_on_move: bool) -> 
             moved_from_to_save, moved_to_to_save = moved_to_to_save, moved_from_to_save
 
     elif len(moved_pieces) == 4:  # castle
-        king_move_idxes = [pos[1] for pos in moved_pieces if pos[0] in ("K", "k")]
-        if not moved_pieces[0][0] in ("K", "k"):  # long castle
+        king_move_idxes = [pos.idx for pos in moved_pieces if pos.piece in ("K", "k")]
+        if not moved_pieces[0].piece in ("K", "k"):  # long castle
             king_move_idxes = sorted(king_move_idxes)[::-1]
 
         moved_from_to_save = get_position_from_idx(king_move_idxes[0], white_on_move)

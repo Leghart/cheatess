@@ -7,6 +7,8 @@ from src.utils.thread import QueueThread
 class LogBox(ctk.CTkTextbox):
     def __init__(self, master: ctk.CTk):
         super().__init__(master, height=550, corner_radius=0, font=("Helvetica", 16))
+        self.master = master
+
         self.grid(row=5, column=0, sticky="nsew", columnspan=2, padx=20, pady=10)
         self.tag_config(LogLevel.SUCCESS, foreground="green")
         self.tag_config(LogLevel.ERROR, foreground="red")
