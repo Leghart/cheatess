@@ -24,5 +24,5 @@ class App(ctk.CTk):
         self.sidebar = SideBar(self)
         self.tabview = TabView(self)
 
-        if not self.cache["show_help"]:
+        if not self.cache["hide_help"]:
             HelpModal(self)

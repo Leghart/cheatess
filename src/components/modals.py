@@ -34,7 +34,7 @@ class HelpModal(ctk.CTkToplevel):
         self.info = ctk.CTkLabel(self, text=msg)
         self.info.grid(row=0, column=0, padx=10, pady=10)
 
-        self.__choice = tk.BooleanVar(value=self.cache["show_help"])
+        self.__choice = tk.BooleanVar(value=self.cache["hide_help"])
         self.hide_modal_checker = ctk.CTkSwitch(
             self,
             text="Dont show it again",
@@ -44,4 +44,4 @@ class HelpModal(ctk.CTkToplevel):
         self.hide_modal_checker.grid(row=1, column=0, pady=20, padx=10)
 
     def __save_in_cache(self) -> None:
-        self.cache["show_help"] = self.__choice.get()
+        self.cache["hide_help"] = self.__choice.get()

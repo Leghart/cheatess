@@ -75,6 +75,8 @@ class Engine:
         self.current_fen: str = ""
         self.first_move: bool = True
 
+        # self._load_stockfish()
+
     def take_screenshot(self):
         x1, y1, x2, y2 = self.board_coords
         image = pyautogui.screenshot(region=(x1, y1, x2, y2))
@@ -109,16 +111,16 @@ class Engine:
         try:
             move = get_diff_move(fen_to_list(self.previous_fen), fen_to_list(self.current_fen), self.white_on_move)
             self.save_board_image()
-        except IndexError:
-            # TODO? add retry?
-            print("======== RETRY ======")
-            self._load_stockfish()
-            self.stockfish.make_moves_from_current_position(self._correct_moves)
+        # except IndexError:
+        #     # TODO? add retry?
+        #     print("======== RETRY ======")
+        #     self._load_stockfish()
+        #     self.stockfish.make_moves_from_current_position(self._correct_moves)
 
-            self.take_screenshot()
-            self.current_fen = predict_fen_from_image(np.array(self._current_board_img), self.model).strip(" ")
-            move = get_diff_move(fen_to_list(self.previous_fen), fen_to_list(self.current_fen), self.white_on_move)
-            self.save_board_image()
+        #     self.take_screenshot()
+        #     self.current_fen = predict_fen_from_image(np.array(self._current_board_img), self.model).strip(" ")
+        #     move = get_diff_move(fen_to_list(self.previous_fen), fen_to_list(self.current_fen), self.white_on_move)
+        #     self.save_board_image()
 
         except Exception as exc:
             if msg := str(exc):
