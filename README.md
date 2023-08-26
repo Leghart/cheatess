@@ -23,6 +23,8 @@ click `stop scanning`. After that if you would like to scan another board you ha
 :heavy_exclamation_mark: If any exception occurs (image below), it will cause
 the application to malfunction - it will stop giving new analysis (you will
 have to deal with that - don't worry, fix for that is comming :wink:).
+
+
 ![image](images/error.png)
 
 # How it works?
@@ -63,3 +65,6 @@ Data for training and testig model got from here: https://www.kaggle.com/dataset
 If you want to train model to detect FEN's from board images by yourself, you have to download any dataset (it is probably one of the best availables for free). To train model, you can change train-variables like epoches, neural network structure and much more. The only change required is to set a path to directory with train-test dataset (`DATA_PATH`). To start training call method `start_train()` from `src/cnn/train.py`. Your created models are saved in directory `models/custom`. To go back to default models, remove every file from `models/custom`.
 
 # Used technologies
+- python 3.11
+- tensorflow + keras
+- customtkinter
