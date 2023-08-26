@@ -113,16 +113,17 @@ class StockfishView(ctk.CTkFrame):
         self._set_time_thinking()
         self._set_threads()
         self._set_level()
+        self._set_path_to_stockfish_engine()
         self._set_buttons()
 
     def _set_depth(self):
         self._depth = tk.IntVar(value=self.cache["depth"] or 15)
         label = ctk.CTkLabel(self.tab, text="Stockfish depth (1-20):", anchor="w")
         label.grid(row=1, column=0, padx=20, pady=(10, 0))
-
         self.depth_spinbox = tk.Spinbox(
             self.tab,
-            values=list(range(1, 21)),
+            from_=1,
+            to=20,
             width=4,
             textvariable=self._depth,
         )
@@ -186,6 +187,15 @@ class StockfishView(ctk.CTkFrame):
         )
         self.level_slider.grid(row=6, column=0, columnspan=2, padx=(20, 10), pady=(10, 10), sticky="ew")
 
+    def _set_path_to_stockfish_engine(self):
+        label = ctk.CTkLabel(self.tab, text="Path to downloaded stockfish engine:", anchor="w")
+        label.grid(row=7, columnspan=2, padx=20, pady=(20, 0))
+
+        self._engine_path = tk.StringVar(value=self.cache["stockfish_engine_path"])
+        self.engine_path_entry = ctk.CTkEntry(self.tab,width=500, textvariable=self._engine_path)
+        self.engine_path_entry.grid(row=8, columnspan=2, padx=20, pady=20)
+
+
     def _set_buttons(self):
         def set_default_values():
             self._level = tk.IntVar(value=1500)
@@ -194,12 +204,14 @@ class StockfishView(ctk.CTkFrame):
             self._depth = tk.IntVar(value=15)
             self._hash = tk.IntVar(value=16)
             self._threads = tk.IntVar(value=1)
+            self._engine_path = tk.StringVar(value="")
 
             self.level_slider.configure(variable=self._level)
             self.thinking_spinbox.configure(textvariable=self._time_thinking)
             self.depth_spinbox.configure(textvariable=self._depth)
             self.hash_spinbox.configure(textvariable=self._hash)
             self.threads_spinbox.configure(textvariable=self._threads)
+            self.engine_path_entry.configure(textvariable=self._engine_path)
 
             LogQueue.send(Message("Default settings have been restored", LogLevel.WARNING))
 
@@ -209,6 +221,18 @@ class StockfishView(ctk.CTkFrame):
             depth = self._depth.get()
             _hash = self._hash.get()
             threads = self._threads.get()
+            engine_path = self._engine_path.get()
+
+            if not engine_path:
+                LogQueue.send(Message("Path to engine is empty!", LogLevel.ERROR))
+                return
+        
+            elif not os.path.isfile(engine_path):
+                LogQueue.send(Message("Typed path to engine doesn't exist", LogLevel.ERROR))
+                return
+
+            self.cache["stockfish_engine_path"] = engine_path
+            self.engine_handler._load_stockfish()
 
             self.engine_handler.update_parameters(
                 level=level,
@@ -222,15 +246,16 @@ class StockfishView(ctk.CTkFrame):
             self.cache["time_thinking"] = time_thinking
             self.cache["depth"] = depth
             self.cache["hash"] = _hash
-            self.cache["threads"] = threads
+            self.cache["threads"] = threads   
+
 
             LogQueue.send(Message("Updated settings", LogLevel.SUCCESS))
 
         to_default_button = ctk.CTkButton(self.tab, text="Reset settings", command=set_default_values)
-        to_default_button.grid(row=7, column=0, padx=(20, 10), pady=(10, 10), sticky="ew")
+        to_default_button.grid(row=9, column=0, padx=(20, 10), pady=(10, 10), sticky="ew")
 
         save_button = ctk.CTkButton(self.tab, text="Save", command=save)
-        save_button.grid(row=7, column=1, padx=(20, 10), pady=(10, 10), sticky="ew")
+        save_button.grid(row=9, column=1, padx=(20, 10), pady=(10, 10), sticky="ew")
 
 
 class GeneralSettingsView(ctk.CTkFrame):
@@ -252,8 +277,8 @@ class GeneralSettingsView(ctk.CTkFrame):
         )
         appearance_mode_optionemenu.grid(row=2, column=0, padx=20, pady=(10, 10))
 
-        self.show_help_button = ctk.CTkButton(self.master.tab("General"), text="Show help", command=self.__show_help)
-        self.show_help_button.grid(row=3, column=0)
+        self.hide_help_button = ctk.CTkButton(self.master.tab("General"), text="Show help", command=self.__hide_help)
+        self.hide_help_button.grid(row=3, column=0)
 
-    def __show_help(self):
+    def __hide_help(self):
         HelpModal(self.master.tab("General"))
