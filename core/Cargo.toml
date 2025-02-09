@@ -5,6 +5,6 @@ edition = "2021"
 
 [dependencies]
 device_query = "3.0.0"
-image = "0.25.5"
+image = "0.24.9"
 rdev = "0.5.3"
 screenshots = "0.8.10"
