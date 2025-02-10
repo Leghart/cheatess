@@ -252,6 +252,39 @@ pub fn check_if_board_was_changed(previous: &[[bool; 8]; 8], current: &[[bool; 8
     return counter == 2;
 }
 
+pub fn runner() {
+    println!("Take a screenshot");
+    let selection = get_screen_area().unwrap();
+    let i = take_screenshot(&selection).unwrap();
+    let image = to_binary(&i, 70);
+    let width = image.width();
+    let height = image.height();
+    let data = image.clone().into_vec();
+    let board: [[bool; 8]; 8] = extract_board_state((data, width, height));
+    let mut previous_board = board.clone();
+
+    for _ in 0..500 {
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        let sss = std::time::Instant::now();
+        let ni = take_screenshot(&selection).unwrap();
+        let nimage = to_binary(&ni, 70);
+        nimage.save(std::path::Path::new("dupa.png")).unwrap();
+        let raw_data = nimage.clone().into_vec();
+        let current = extract_board_state((raw_data.clone(), width, height));
+        if check_if_board_was_changed(&previous_board, &current) {
+            test_save_img(&raw_data, width as u32, height as u32);
+            let (start, end) = detect_move(&previous_board, &current);
+            let start_pos = pixel_to_chess_coord(start.0, start.1, width as usize, height as usize);
+            let end_pos = pixel_to_chess_coord(end.0, end.1, width as usize, height as usize);
+            println!("{} -> {}", start_pos, end_pos);
+            println!("{:?}", sss.elapsed());
+            previous_board = current;
+        } else {
+            println!("Not found any changes")
+        }
+    }
+}
+
 // pub fn runner() {
 //     println!("Take a screenshot");
 //     let selection = get_screen_area().unwrap();
