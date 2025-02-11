@@ -1,6 +1,14 @@
 use device_query::{DeviceQuery, DeviceState, MouseState};
 use image::imageops::crop_imm;
-use image::{ColorType, ImageBuffer, Luma, Rgba};
+use image::{imageops, ColorType, DynamicImage, ImageBuffer, Luma, Rgba};
+use opencv::core::Vector;
+use opencv::{
+    core::{Mat, Point, Scalar, Size, CV_8UC1},
+    imgcodecs, imgproc,
+    prelude::*,
+    types,
+};
+
 use screenshots::Screen;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -54,24 +62,91 @@ fn detect_white_edges(image: &ImageBuffer<Luma<u8>, Vec<u8>>) -> (u32, u32, u32,
 
 pub fn trimm(image: &ImageBuffer<Luma<u8>, Vec<u8>>) -> ImageBuffer<Luma<u8>, Vec<u8>> {
     let (x_min, x_max, y_min, y_max) = detect_white_edges(image);
-
     let cropped = crop_imm(image, x_min, y_min, x_max - x_min, y_max - y_min).to_image();
     cropped
 }
 
-pub fn to_binary(
-    image: &ImageBuffer<Rgba<u8>, Vec<u8>>,
-    threshold: u32,
-) -> ImageBuffer<Luma<u8>, Vec<u8>> {
-    let (width, height) = image.dimensions();
-    let mut binary_image = ImageBuffer::<Luma<u8>, Vec<u8>>::new(width, height);
+pub fn detect_contours(image: &Mat) -> opencv::Result<Vector<Vector<Point>>> {
+    let mut contours = Vector::new();
+    imgproc::find_contours(
+        &image,
+        &mut contours,
+        imgproc::RETR_EXTERNAL,
+        imgproc::CHAIN_APPROX_SIMPLE,
+        Point::new(0, 0),
+    )?;
 
-    for (x, y, pixel) in image.enumerate_pixels() {
-        let intensity = (pixel[0] as u32 + pixel[1] as u32 + pixel[2] as u32) / 3;
-        let binary_value = if intensity > threshold { 255 } else { 0 };
-        binary_image.put_pixel(x, y, Luma([binary_value]));
+    Ok(contours)
+}
+
+pub fn compare_contours(contours1: &Vector<Vector<Point>>, contours2: &Vector<Vector<Point>>) {
+    let mut moved_figures = vec![];
+
+    for contour1 in contours1.iter() {
+        let mut match_found = false;
+        for contour2 in contours2.iter() {
+            let similarity =
+                imgproc::match_shapes(&contour1, &contour2, imgproc::CONTOURS_MATCH_I1, 0.0)
+                    .unwrap();
+
+            if similarity < 0.1 {
+                match_found = true;
+                break;
+            }
+        }
+
+        if !match_found {
+            moved_figures.push(contour1);
+        }
     }
 
+    if !moved_figures.is_empty() {
+        println!("Znaleziono figury, które się poruszyły!");
+    } else {
+        println!("Brak ruchu figury.");
+    }
+}
+
+pub fn save_mat(image: &Mat, path: &str) {
+    let params = Vector::from_iter([16, 0]);
+    imgcodecs::imwrite(path, &image, &params);
+}
+
+pub fn resize(mat: &Mat, new_width: u32, new_height: u32) -> opencv::Result<Mat> {
+    let size = mat.size().unwrap();
+
+    // let mat = Mat::from_slice(&input_image).unwrap();
+
+    let mat =
+        Mat::new_rows_cols_with_data(size.height, size.width, mat.data_bytes().unwrap()).unwrap();
+
+    let new_size = Size::new(new_width as i32, new_height as i32);
+    let mut resized_mat = Mat::default();
+    imgproc::resize(
+        &mat,
+        &mut resized_mat,
+        new_size,
+        0.0,
+        0.0,
+        imgproc::INTER_LINEAR,
+    )?;
+
+    Ok(resized_mat)
+}
+
+pub fn to_binary(image: &Mat) -> Mat {
+    let mut gray_image = Mat::default();
+    imgproc::cvt_color(image, &mut gray_image, imgproc::COLOR_BGR2GRAY, 0).unwrap();
+
+    let mut binary_image = Mat::default();
+    imgproc::threshold(
+        &gray_image,
+        &mut binary_image,
+        127.0,
+        255.0,
+        imgproc::THRESH_BINARY,
+    )
+    .unwrap();
     binary_image
 }
 
@@ -111,55 +186,56 @@ pub fn extract_board_state(
 ) -> Result<[[Option<Color>; 8]; 8], &'static str> {
     let width = image.width();
     let height = image.height();
-    let _vec = image.to_vec();
+    let _vec = image.clone().to_vec(); //tmp
 
     let square_width = width / 8;
     let square_height = height / 8;
 
     let mut board: [[Option<Color>; 8]; 8] = [[None; 8]; 8];
 
-    for row in 1..8 {
-        let y = row * square_height;
-        for x in 0..width {
-            let pixel_index = (y * width + x) as usize;
-            if _vec[pixel_index] == 0 {
-                return Err("Detected a piece between squares on a horizontal grid line!");
-            }
-        }
-    }
-
-    for col in 1..8 {
-        let x = col * square_width;
-        for y in 0..height {
-            let pixel_index = (y * width + x) as usize;
-            if _vec[pixel_index] == 0 {
-                return Err("Detected a piece between squares on a vertical grid line!");
-            }
-        }
-    }
+    let mut black_pixel_counts: [[u32; 8]; 8] = [[0; 8]; 8];
+    let mut black_pixels: Vec<u32> = Vec::new();
+    let mut white_pixels: Vec<u32> = Vec::new();
+    let mut populate_black = true;
 
     for row in 0..8 {
         for col in 0..8 {
-            let mut black_pixel_count = 0;
-            let mut all = 0;
+            let mut black_pixel_count: u32 = 0;
 
+            // count pixels in each board square
             for y in (row * square_height)..((row + 1) * square_height) {
                 for x in (col * square_width)..((col + 1) * square_width) {
                     let pixel_index = (y * width + x) as usize; //TODO
                     if _vec[pixel_index] == 0 {
                         black_pixel_count += 1;
                     }
-                    all += 1;
                 }
             }
+            black_pixel_counts[row as usize][col as usize] = black_pixel_count;
+            if black_pixel_count == 0 {
+                populate_black = false;
+            }
 
-            // TODO: impl for white
-            if (black_pixel_count * 100 / all) as f32 > 0.05 as f32 {
-                // TODO!
-                if black_pixel_count > 1800 {
-                    board[row as usize][col as usize] = Some(Color::BLACK);
+            if populate_black {
+                black_pixels.push(black_pixel_count);
+            } else {
+                white_pixels.push(black_pixel_count);
+            }
+        }
+    }
+
+    let min_pivot = black_pixels.iter().min().unwrap();
+    let max_pivot = white_pixels.iter().max().unwrap();
+
+    for row in 0..8 {
+        for col in 0..8 {
+            board[row][col] = {
+                if black_pixel_counts[row][col] >= *min_pivot {
+                    Some(Color::BLACK)
+                } else if black_pixel_counts[row][col] >= *max_pivot {
+                    Some(Color::WHITE)
                 } else {
-                    board[row as usize][col as usize] = Some(Color::WHITE);
+                    None
                 }
             }
         }
@@ -171,11 +247,9 @@ pub fn extract_board_state(
 pub fn detect_move(
     before: &[[Option<Color>; 8]; 8],
     after: &[[Option<Color>; 8]; 8],
-) -> ((usize, usize), (usize, usize)) {
+) -> Result<((usize, usize), (usize, usize)), &'static str> {
     let mut start_pos = None;
     let mut end_pos = None;
-
-    println!("before: {:?} after: {:?}", before, after);
 
     //TODO!: exf4 panic
 
@@ -190,7 +264,6 @@ pub fn detect_move(
             // piece took another piece
             if end_pos.is_none() && before[row][col].is_some() && after[col][row].is_some() {
                 if before[row][col] != after[row][col] {
-                    println!("END 1 {col} {row}");
                     end_pos = Some((col, row));
                 }
             } else if end_pos.is_none() && before[row][col].is_none() && after[row][col].is_some() {
@@ -198,15 +271,16 @@ pub fn detect_move(
             }
 
             if end_pos.is_some() && start_pos.is_some() {
-                return (start_pos.unwrap(), end_pos.unwrap());
+                return Ok((start_pos.unwrap(), end_pos.unwrap()));
             }
         }
     }
 
-    (
-        start_pos.expect("Not found start piece position"),
-        end_pos.expect("Not found end piece position"),
-    )
+    if start_pos.is_some() && end_pos.is_some() {
+        return Ok((start_pos.unwrap(), end_pos.unwrap()));
+    }
+
+    Err("Could not match pieces to move")
 }
 
 pub fn pixel_to_chess_coord(x: usize, y: usize) -> String {
@@ -230,46 +304,68 @@ pub fn check_if_board_was_changed(
     return false;
 }
 
-pub fn runner() {
-    println!("Take a screenshot");
-    let selection = get_screen_area().unwrap();
-    let ref_image: ImageBuffer<Luma<u8>, Vec<u8>> = {
-        let raw_image = take_screenshot(&selection).unwrap();
-        let binary_image = to_binary(&raw_image, 70);
-        trimm(&binary_image)
-    };
+// pub fn runner() {
+//     println!("Take a screenshot");
+//     let selection = get_screen_area().unwrap();
+//     println!("Time to play the gaaaaame...");
+//     let ref_image: ImageBuffer<Luma<u8>, Vec<u8>> = {
+//         let raw_image = take_screenshot(&selection).unwrap();
+//         let binary_image = to_binary(&raw_image, 30);
+//         trimm(&binary_image)
+//         // binary_image
+//     };
 
-    let mut previous_board = extract_board_state(ref_image).unwrap();
+//     let mut previous_board = extract_board_state(ref_image).unwrap();
 
-    loop {
-        std::thread::sleep(std::time::Duration::from_millis(100));
-        let start_time = std::time::Instant::now();
+//     loop {
+//         std::thread::sleep(std::time::Duration::from_millis(100));
+//         let start_time = std::time::Instant::now();
 
-        let new_image = {
-            let raw_image = take_screenshot(&selection).unwrap();
-            let bin = to_binary(&raw_image, 70);
-            trimm(&bin)
-            // TODO: change trim to updated selecion area with trimmed dimensions
-        };
-        new_image.save(std::path::Path::new("updated.png")).unwrap(); // tmp
+//         let new_image = {
+//             let _raw_image = take_screenshot(&selection).unwrap();
+//             let _binary_image = to_binary(&_raw_image, 30);
+//             trimm(&_binary_image)
+//             // _binary_image
+//             // TODO: change trim to updated selecion area with trimmed dimensions
+//         };
+//         new_image.save(std::path::Path::new("updated.png")).unwrap(); // tmp
 
-        let current_result = extract_board_state(new_image); //TODO: missing info about piece color
+//         let current_result = extract_board_state(new_image);
 
-        if current_result.is_err() {
-            continue;
-        }
+//         if current_result.is_err() {
+//             let e = current_result.err().unwrap();
+//             println!("Border error {:?}", e);
+//             continue;
+//         }
 
-        let current = current_result.unwrap();
+//         let current = current_result.unwrap();
 
-        if check_if_board_was_changed(&previous_board, &current) {
-            let (start, end) = detect_move(&previous_board, &current);
-            let start_pos = pixel_to_chess_coord(start.0, start.1);
-            let end_pos = pixel_to_chess_coord(end.0, end.1);
-            println!("{} -> {} [{:?}]", start_pos, end_pos, start_time.elapsed());
-            previous_board = current;
-        }
-    }
-    println!("STOP");
+//         if check_if_board_was_changed(&previous_board, &current) {
+//             let move_result = detect_move(&previous_board, &current);
+//             if move_result.is_err() {
+//                 // previous_board = current;
+//                 let e = move_result.err().unwrap();
+//                 println!("Move error: {e}");
+//                 println!("BEFORE: {:?}", previous_board);
+//                 println!("AFTER: {:?}", current);
+//                 // break;
+//                 continue;
+//             }
+//             let (start, end) = move_result.unwrap();
+//             let start_pos = pixel_to_chess_coord(start.0, start.1);
+//             let end_pos = pixel_to_chess_coord(end.0, end.1);
+//             println!("{} -> {} [{:?}]", start_pos, end_pos, start_time.elapsed());
+//             previous_board = current;
+//         }
+//     }
+// }
+
+pub fn to_mat(image: &ImageBuffer<Rgba<u8>, Vec<u8>>) -> Mat {
+    let (img_width, img_height) = image.dimensions();
+    let img_data = image.to_vec();
+
+    let mat = Mat::new_rows_cols_with_data(img_height as i32, img_width as i32, &img_data).unwrap();
+    mat.try_clone().unwrap()
 }
 
 pub fn take_screenshot(
