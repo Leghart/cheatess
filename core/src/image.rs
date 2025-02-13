@@ -59,6 +59,16 @@ impl ImageProcessing {
     fn threshold_image(&self, image: &Mat) -> Result<Mat, Box<dyn std::error::Error>> {
         let mut thresholded = Mat::default();
         imgproc::cvt_color(&image, &mut thresholded, imgproc::COLOR_BGR2GRAY, 0)?;
+        // imgproc::adaptive_threshold(
+        //     &image,
+        //     &mut thresholded,
+        //     255.0,
+        //     imgproc::ADAPTIVE_THRESH_GAUSSIAN_C,
+        //     imgproc::THRESH_BINARY,
+        //     11,
+        //     2.0,
+        // )?;
+
         Ok(thresholded)
     }
 
