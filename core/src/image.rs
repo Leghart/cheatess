@@ -149,7 +149,11 @@ impl ImageProcessing {
                 &mask,
             )?;
 
+            let mut ctr = 0;
             while min_val < *threshold {
+                if ctr >= 10 {
+                    break;
+                }
                 let top_left = min_loc;
 
                 self.pixels_to_board(top_left, &result.size().unwrap(), piece_name, &mut board);
@@ -177,6 +181,7 @@ impl ImageProcessing {
                     Some(&mut max_loc),
                     &Mat::default(),
                 )?;
+                ctr += 1;
             }
         }
 
@@ -187,8 +192,8 @@ impl ImageProcessing {
         let tile_width = size.width / 8;
         let tile_height = size.height / 8;
 
-        let col = point.x / tile_width;
-        let row = 7 - (point.y / tile_height);
+        let col = (point.x / tile_width).clamp(0, 7);
+        let row = (7 - (point.y / tile_height)).clamp(0, 7);
 
         board[row as usize][col as usize] = *piece;
     }
