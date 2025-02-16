@@ -1,119 +1,161 @@
 import glob
 import os
+import re
 import time
 
 import cv2
-import pyautogui as pyautogui
+import numpy as np
+import pyautogui
 
-# img = pyautogui.screenshot(region=(440, 219, 758, 759))
-# img.save("board3.png")
+# CHESS_PIECE_DIR = glob.glob("chesscom/*.*")
+
+SHOW_IMAGE = True
+EXPORT_IMAGE = True
 
 
-def match_template_limited(
-    gray_chessboard,
-    gray_figure,
-    threshold=0.8,
-    board_width=759,
-    board_height=758,
-):
-    ss = time.time()
-    result = cv2.matchTemplate(gray_chessboard, gray_figure, cv2.TM_CCOEFF_NORMED)
-    # print("template: ", time.time() - ss)
-    # mask = np.ones(result.shape, dtype=np.uint8)
-    square_width = board_width // 8
-    square_height = board_height // 8
+class Chesscom:
+    thresholds = {
+        "B": 0.3,  # bishop
+        "b": 0.8,  # bishop_black
+        "K": 0.2,  # king
+        "k": 0.7,  # king_black
+        "N": 0.1,  # knight
+        "n": 0.5,  # knight_black
+        "P": 0.15,  # pawn
+        "p": 0.9,  # pawn_black
+        "Q": 0.7,  # queen
+        "q": 0.7,  # queen_black
+        "R": 0.3,  # rook
+        "r": 0.3,  # rook_black
+    }
 
-    unique_points = []
-    # used_squares = set()
-    a = 0
-    while True:
+    def __str__(self):
+        return "chesscom"
+
+    @property
+    def region(self):
+        return (440, 219, 758, 762)
+
+
+class Lichess:
+    thresholds = {
+        "B": 0.2,  # bishop
+        "b": 0.3,  # bishop_black
+        "K": 0.2,  # king
+        "k": 0.2,  # king_black
+        "N": 0.1,  # knight
+        "n": 0.2,  # knight_black
+        "P": 0.15,  # pawn
+        "p": 0.3,  # pawn_black
+        "Q": 0.2,  # queen
+        "q": 0.2,  # queen_black
+        "R": 0.2,  # rook
+        "r": 0.2,  # rook_black
+    }
+
+    def __str__(self):
+        return "lichess"
+
+    @property
+    def region(self):
+        return (568, 218, 720, 720)
+
+
+def load_pieces(platform: Chesscom | Lichess):
+    dir = glob.glob(f"{platform}/*.*")
+    chessPieceImages = dict()
+    for path in dir:
+        baseName = os.path.basename(path)
+        fileName = re.search("[\w() -]+?(?=\.)", baseName).group(0)[0]
+        pieceImage = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+        chessPieceImages[fileName] = (pieceImage, platform.thresholds[fileName])
+    return chessPieceImages
+
+
+def detectPieceOfChess(boardImage: cv2.Mat, chessPieceImages: dict[str, cv2.Mat]):
+    start = time.time()
+
+    for piece in chessPieceImages:
+        pieceImage = chessPieceImages[piece][0]
+        if isinstance(platform, Chesscom) and piece == "p":
+            pieceImage = cv2.resize(pieceImage, (43, 43))
+        pieceThreshold = chessPieceImages[piece][1]
+        pieceName = piece
+
+        boardImageGray = cv2.cvtColor(boardImage, cv2.COLOR_BGR2GRAY)
+        pieceImageGray = cv2.cvtColor(pieceImage, cv2.COLOR_BGR2GRAY)
+
+        mask = pieceImage[:, :, 3]
+        h, w = pieceImageGray.shape
+
+        result = cv2.matchTemplate(
+            boardImageGray, pieceImageGray, cv2.TM_SQDIFF_NORMED, mask=mask
+        )
         min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
 
-        if max_val < threshold:
-            break
+        while min_val <= pieceThreshold:
+            top_left = min_loc
+            bottom_right = (top_left[0] + w, top_left[1] + h)
 
-        x, y = max_loc
-        # col = x // square_width
-        # row = y // square_height
+            rectangleColor = (0, 250, 50)
+            cv2.rectangle(boardImage, top_left, bottom_right, rectangleColor, 2)
 
-        # if (row, col) in used_squares:
-        a += 1
-        #     result[y : y + square_height, x : x + square_width] = 0
-        #     continue
-
-        # used_squares.add((row, col))
-        unique_points.append((x, y))
-
-        x_min = max(0, x - square_width // 2)
-        y_min = max(0, y - square_height // 2)
-        x_max = min(result.shape[1], x + square_width // 2)
-        y_max = min(result.shape[0], y + square_height // 2)
-
-        result[y_min:y_max, x_min:x_max] = 0
-    # print(a)
-    return unique_points
-
-
-def run(brd, pcs):
-    chessboard = cv2.imread(brd, cv2.IMREAD_COLOR)
-    figure_paths = glob.glob(f"{pcs}/*.png")
-    w, h, _ = chessboard.shape
-    threshold = 0.75
-
-    board = [[None for _ in range(8)] for _ in range(8)]
-    square_w = w / 8
-    square_h = h / 8
-    a = 0
-    match_times = []
-    for fig_path in figure_paths:
-        figure = cv2.imread(fig_path, cv2.IMREAD_UNCHANGED)
-        figure_name = os.path.basename(fig_path).replace(".png", "")
-
-        gray_figure = cv2.cvtColor(figure, cv2.COLOR_BGR2GRAY)
-        gray_chessboard = cv2.cvtColor(chessboard, cv2.COLOR_BGR2GRAY)
-
-        ss = time.time()
-        loc = match_template_limited(gray_chessboard, gray_figure, threshold)
-        match_times.append(time.time() - ss)
-        for pt in loc:
-            col = int(pt[0] // square_w)
-            row = int(pt[1] // square_h)
-
-            board[row][col] = True
-
-            cv2.rectangle(
-                chessboard,
-                pt,
-                (pt[0] + gray_figure.shape[1], pt[1] + gray_figure.shape[0]),
-                (0, 0, 255),
-                1,
+            textColor = (255, 0, 0) if pieceName.isupper() else (0, 0, 255)
+            textPosition = (top_left[0], top_left[1] + 20)
+            cv2.putText(
+                boardImage,
+                pieceName,
+                textPosition,
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                textColor,
+                2,
+                cv2.LINE_AA,
             )
 
-            # cv2.putText(
-            #     chessboard,
-            #     figure_name,
-            #     (pt[0], pt[1] + 10),
-            #     cv2.FONT_HERSHEY_SIMPLEX,
-            #     1,
-            #     (0, 255, 0),
-            #     1,
-            #     cv2.LINE_AA,
-            # )
+            h1 = top_left[1] - h // 2
+            h1 = np.clip(h1, 0, result.shape[0])
 
-        # print(figure_name, a)
+            h2 = top_left[1] + h // 2 + 1
+            h2 = np.clip(h2, 0, result.shape[0])
 
-    cv2.imwrite("output.png", chessboard)
-    # cv2.imshow("result", chessboard_copy)
-    # cv2.waitKey(0)
-    # print("match times: ", sum(match_times))
+            w1 = top_left[0] - w // 2
+            w1 = np.clip(w1, 0, result.shape[1])
+
+            w2 = top_left[0] + w // 2 + 1
+            w2 = np.clip(w2, 0, result.shape[1])
+
+            result[h1:h2, w1:w2] = 1
+
+            min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+
+    print(time.time() - start)
+    if SHOW_IMAGE:
+        # cv2.imshow("result board", boardImage)
+        cv2.imwrite("output.jpg", boardImage)
+
+
+chesscom = Chesscom()
+lichess = Lichess()
+
+platform = lichess
 
 
 while True:
-    st = time.time()
+    s = time.time()
 
-    # for _ in range(1):
-    img = pyautogui.screenshot(region=(440, 219, 758, 759))
-    img.save("board3.png")
-    run("board3.png", "npieces")
-    # time.sleep(0.2)
-    print("time: ", time.time() - st)
+    img = pyautogui.screenshot(region=platform.region)
+
+    img.save("proxy-board.jpg")
+
+    img = cv2.imread("proxy-board.jpg")
+    nimg = cv2.resize(img, (360, 360))
+    cv2.imwrite("resized_board.jpg", nimg)
+
+    pieces = load_pieces(platform)
+
+    boardImage = cv2.imread("resized_board.jpg")
+
+    detectPieceOfChess(boardImage, pieces)
+    # print(time.time() - s)
+    # cv2.waitKey(0)
