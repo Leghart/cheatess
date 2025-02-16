@@ -109,11 +109,11 @@ def run(brd, pcs):
 
 
 while True:
+    st = time.time()
 
     # for _ in range(1):
     img = pyautogui.screenshot(region=(440, 219, 758, 759))
     img.save("board3.png")
-    # st = time.time()
     run("board3.png", "npieces")
     # time.sleep(0.2)
-    # print("time: ", time.time() - st)
+    print("time: ", time.time() - st)
