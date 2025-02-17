@@ -1,22 +1,37 @@
 use opencv::{
-    core::{KeyPoint, Mat, Point, Rect, Scalar, Size, Vector},
+    core::{min_max_loc, split, KeyPoint, Mat, Point, Rect, Scalar, Size, Vector},
     features2d::{BFMatcher, ORB_ScoreType, ORB},
     highgui, imgcodecs, imgproc,
     prelude::*,
 };
+mod utils;
 use screenshots::Screen;
+use std::fs;
 use std::{collections::HashMap, thread, time::Duration};
 
 pub struct ChessboardTracker {
     region: Rect,
-    pieces_images: HashMap<char, Mat>,
+    thresholds: HashMap<String, f64>,
 }
 
 impl ChessboardTracker {
     pub fn new(region: Rect) -> Self {
         ChessboardTracker {
             region,
-            pieces_images: HashMap::new(),
+            thresholds: HashMap::from_iter([
+                ("B".to_string(), 0.35),
+                ("b".to_string(), 0.55),
+                ("K".to_string(), 0.2),
+                ("k".to_string(), 0.3),
+                ("N".to_string(), 0.1),
+                ("n".to_string(), 0.3),
+                ("P".to_string(), 0.15),
+                ("p".to_string(), 0.9),
+                ("Q".to_string(), 0.7),
+                ("q".to_string(), 0.3),
+                ("R".to_string(), 0.25),
+                ("r".to_string(), 0.3),
+            ]),
         }
     }
 
@@ -27,82 +42,175 @@ impl ChessboardTracker {
             self.region.width as u32,
             self.region.height as u32,
         )?;
+        screen.save("screenshot.jpg").unwrap();
         let image = Mat::from_slice(screen.as_raw())?;
+
         Ok(image.try_clone()?)
     }
 
-    pub fn process_image(&self, image: &Mat) -> Result<[[char; 8]; 8], Box<dyn std::error::Error>> {
-        let mut board: [[char; 8]; 8] = [[' '; 8]; 8];
+    pub fn load_pieces(&self) -> Result<HashMap<String, (Mat, f64)>, Box<dyn std::error::Error>> {
+        let mut pieces: HashMap<String, (Mat, f64)> = HashMap::new();
 
-        // Konwersja do odcieni szarości
-        let mut gray = Mat::default();
-        imgproc::cvt_color(image, &mut gray, imgproc::COLOR_BGR2GRAY, 0)?;
-
-        // ORB Feature Detector
-        let mut orb = ORB::create(500, 1.2, 8, 31, 0, 2, ORB_ScoreType::FAST_SCORE, 31, 20)?;
-        let mut keypoints_board = Vector::new();
-        let mut descriptors_board = Mat::default();
-        orb.detect_and_compute(
-            &gray,
-            &Mat::default(),
-            &mut keypoints_board,
-            &mut descriptors_board,
-            false,
-        )?;
-
-        let mut matcher = BFMatcher::create(6, true)?;
-
-        for (piece, template) in &self.pieces_images {
-            let mut keypoints_piece = Vector::new();
-            let mut descriptors_piece = Mat::default();
-            orb.detect_and_compute(
-                template,
-                &Mat::default(),
-                &mut keypoints_piece,
-                &mut descriptors_piece,
-                false,
-            )?;
-
-            let mut matches = Vector::new();
-            matcher.match_(&descriptors_piece, &mut matches, &Mat::default())?;
-
-            if matches.len() > 10 {
-                let avg_x = matches
-                    .iter()
-                    .map(|m| keypoints_board.get(m.train_idx as usize).unwrap().pt().x as usize)
-                    .sum::<usize>()
-                    / matches.len();
-                let avg_y = matches
-                    .iter()
-                    .map(|m| keypoints_board.get(m.train_idx as usize).unwrap().pt().y as usize)
-                    .sum::<usize>()
-                    / matches.len();
-
-                let row = (avg_y / (self.region.height / 8) as usize) as usize;
-                let col = (avg_x / (self.region.width / 8) as usize) as usize;
-                board[row][col] = *piece;
+        for entry in fs::read_dir("../chesscom/").unwrap() {
+            if let Ok(entry) = entry {
+                // let file_name = entry.file_name().into_string().unwrap();
+                let file_name = entry
+                    .path()
+                    .file_stem()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .to_string();
+                let img = imgcodecs::imread(
+                    &entry.path().to_str().unwrap(),
+                    imgcodecs::IMREAD_UNCHANGED,
+                )?;
+                pieces.insert(
+                    file_name.clone(),
+                    (img, *self.thresholds.get(&file_name).unwrap()),
+                );
             }
         }
 
-        Ok(board)
+        Ok(pieces)
+    }
+
+    pub fn process_image(
+        &self,
+        board_image: &Mat,
+        pieces: HashMap<String, (Mat, f64)>,
+    ) -> Result<[[char; 8]; 8], Box<dyn std::error::Error>> {
+        let mut result: [[char; 8]; 8] = [[' '; 8]; 8];
+        let mut board_clone = board_image.clone();
+
+        for piece_name in pieces.keys() {
+            let piece_threshold = pieces.get(piece_name).unwrap().clone().1;
+            let mut piece_image = pieces.get(piece_name).unwrap().clone().0;
+            // WA for chesscom
+            if *piece_name == "p".to_string() {
+                piece_image = utils::resize(&piece_image, 43, 43).unwrap();
+            }
+
+            let mut board_gray = Mat::default();
+            imgproc::cvt_color(board_image, &mut board_gray, imgproc::COLOR_BGR2GRAY, 0).unwrap();
+
+            let mut piece_gray = Mat::default();
+            imgproc::cvt_color(&piece_image, &mut piece_gray, imgproc::COLOR_BGR2GRAY, 0).unwrap();
+
+            // let mut mask = Mat::default();
+            let mut channels: Vector<Mat> = Vector::new();
+            // if piece_image.channels() == 4 {
+            split(&piece_image, &mut channels).unwrap();
+            let mask = channels.get(3).unwrap();
+            // }
+            let size = piece_gray.size().unwrap();
+            let (h, w) = (size.height, size.width);
+
+            let mut matched = Mat::default();
+            imgproc::match_template(
+                &board_gray,
+                &piece_gray,
+                &mut matched,
+                imgproc::TM_SQDIFF_NORMED,
+                &mask,
+            )?;
+
+            let mut min_val = 0.0;
+            let mut max_val = 0.0;
+            let mut min_loc = Point::default();
+            let mut max_loc = Point::default();
+
+            min_max_loc(
+                &matched,
+                Some(&mut min_val),
+                Some(&mut max_val),
+                Some(&mut min_loc),
+                Some(&mut max_loc),
+                &Mat::default(),
+            )?;
+
+            while min_val < piece_threshold {
+                let top_left = min_loc;
+
+                let rectangle_color = Scalar::new(0.0, 250.0, 50.0, 0.0);
+                let rect = Rect::new(top_left.x, top_left.y, w, h);
+                imgproc::rectangle(&mut board_clone, rect, rectangle_color, 2, 8, 0)?;
+
+                let text_color = if piece_name.chars().next().unwrap().is_uppercase() {
+                    Scalar::new(255.0, 0.0, 0.0, 0.0) // Red for black pieces
+                } else {
+                    Scalar::new(0.0, 0.0, 255.0, 0.0) // Blue for white pieces
+                };
+
+                let text_position = Point::new(top_left.x, top_left.y + 20);
+                imgproc::put_text(
+                    &mut board_clone,
+                    &piece_name.to_string(),
+                    text_position,
+                    imgproc::FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    text_color,
+                    2,
+                    8,
+                    false,
+                )?;
+
+                // highgui::imshow("abc", &board_clone);
+                // loop {
+                //     if highgui::wait_key(0)? == 48 {
+                //         break;
+                //     }
+                // }
+                // let params = Vector::from_iter([0, 16]);
+                // imgcodecs::imwrite("rust_result.jpg", &board_clone, &params);
+
+                let size = matched.size()?;
+                let top_x = top_left.x.max(0).min(size.width - 1);
+                let top_y = top_left.y.max(0).min(size.height - 1);
+
+                let rect_x = (top_x as i32 - 22).max(0);
+                let rect_y = (top_y as i32 - 22).max(0);
+
+                let rect_w = (45).min(size.width - rect_x);
+                let rect_h = (45).min(size.height - rect_y);
+
+                let poison = Rect::new(rect_x, rect_y, rect_w, rect_h);
+
+                let mut result_slice = matched.roi_mut(poison)?;
+                result_slice
+                    .set_to(&Scalar::all(1.0), &Mat::default())
+                    .unwrap();
+
+                min_max_loc(
+                    &matched,
+                    Some(&mut min_val),
+                    Some(&mut max_val),
+                    Some(&mut min_loc),
+                    Some(&mut max_loc),
+                    &Mat::default(),
+                )
+                .unwrap();
+                // println!("NEXT {min_val} {max_val} {:?} {:?}", min_loc, max_loc);
+            }
+        }
+        // let params = Vector::from_iter([0, 16]);
+        // imgcodecs::imwrite("rust_result.jpg", &board_clone, &params);
+        Ok(result)
     }
 }
 
 fn main() {
-    let tracker = ChessboardTracker::new(Rect::new(100, 100, 400, 400));
-    let image = imgcodecs::imread("boards/ccc.png", imgcodecs::IMREAD_COLOR).unwrap();
-    match tracker.process_image(&image) {
-        Ok(board) => println!("{:?}", board),
-        Err(e) => eprintln!("Error processing image: {}", e),
-    }
+    // let screen_area = utils::get_screen_area().unwrap();
+    // println!("{:?}", screen_area);
+    let tracker = ChessboardTracker::new(Rect::new(440, 219, 758, 759));
+    let _ = tracker.capture_screenshot().unwrap();
 
-    // loop {
-    //     if let Ok(image) = tracker.capture_screenshot() {
-    //         match tracker.process_image(&image) {
-    //             Ok(board) => println!("{:?}", board),
-    //             Err(e) => eprintln!("Error processing image: {}", e),
-    //         }
-    //     }
-    //     thread::sleep(Duration::from_millis(100));
-    // }
+    let image = imgcodecs::imread("screenshot.jpg", imgcodecs::IMREAD_UNCHANGED).unwrap();
+
+    let resized = utils::resize(&image, 360, 360).unwrap();
+
+    let pieces = tracker.load_pieces().unwrap();
+    let st = std::time::Instant::now();
+    let result = tracker.process_image(&resized, pieces);
+    println!("{:?}", st.elapsed());
 }

@@ -112,26 +112,20 @@ pub fn save_mat(image: &Mat, path: &str) {
     imgcodecs::imwrite(path, &image, &params);
 }
 
-pub fn resize(mat: &Mat, new_width: u32, new_height: u32) -> opencv::Result<Mat> {
-    let size = mat.size().unwrap();
+pub fn resize(image: &Mat, new_width: i32, new_height: i32) -> opencv::Result<Mat> {
+    let new_size = Size::new(new_width, new_height);
 
-    // let mat = Mat::from_slice(&input_image).unwrap();
-
-    let mat =
-        Mat::new_rows_cols_with_data(size.height, size.width, mat.data_bytes().unwrap()).unwrap();
-
-    let new_size = Size::new(new_width as i32, new_height as i32);
-    let mut resized_mat = Mat::default();
+    let mut resized_img = Mat::default();
     imgproc::resize(
-        &mat,
-        &mut resized_mat,
+        &image,
+        &mut resized_img,
         new_size,
         0.0,
         0.0,
         imgproc::INTER_LINEAR,
     )?;
 
-    Ok(resized_mat)
+    Ok(resized_img)
 }
 
 pub fn to_binary(image: &Mat) -> Mat {

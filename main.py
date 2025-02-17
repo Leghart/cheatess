@@ -93,7 +93,7 @@ def detectPieceOfChess(boardImage: cv2.Mat, chessPieceImages: dict[str, cv2.Mat]
         )
         min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
 
-        while min_val <= pieceThreshold:
+        while min_val < pieceThreshold:
             top_left = min_loc
             bottom_right = (top_left[0] + w, top_left[1] + h)
 
@@ -138,7 +138,7 @@ def detectPieceOfChess(boardImage: cv2.Mat, chessPieceImages: dict[str, cv2.Mat]
 chesscom = Chesscom()
 lichess = Lichess()
 
-platform = lichess
+platform = chesscom
 
 
 while True:
