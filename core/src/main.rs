@@ -1,13 +1,12 @@
 use opencv::{
-    core::{min_max_loc, split, KeyPoint, Mat, Point, Rect, Scalar, Size, Vector, CV_8UC4},
-    features2d::{BFMatcher, ORB_ScoreType, ORB},
+    core::{min_max_loc, split, Mat, Point, Rect, Scalar, Vector, CV_8UC4},
     highgui, imgcodecs, imgproc,
     prelude::*,
 };
 mod utils;
 use screenshots::Screen;
+use std::collections::HashMap;
 use std::fs;
-use std::{collections::HashMap, thread, time::Duration};
 
 pub struct ChessboardTracker {
     region: Rect,
@@ -15,9 +14,9 @@ pub struct ChessboardTracker {
 }
 
 impl ChessboardTracker {
-    pub fn new(region: Rect) -> Self {
+    pub fn chesscom_default() -> Self {
         ChessboardTracker {
-            region,
+            region: Rect::new(440, 219, 758, 759),
             thresholds: HashMap::from_iter([
                 ("B".to_string(), 0.35),
                 ("b".to_string(), 0.55),
@@ -28,8 +27,28 @@ impl ChessboardTracker {
                 ("P".to_string(), 0.15),
                 ("p".to_string(), 0.9),
                 ("Q".to_string(), 0.7),
-                ("q".to_string(), 0.3),
+                ("q".to_string(), 0.4),
                 ("R".to_string(), 0.4),
+                ("r".to_string(), 0.3),
+            ]),
+        }
+    }
+
+    pub fn lichess_default() -> Self {
+        ChessboardTracker {
+            region: Rect::new(568, 218, 720, 720),
+            thresholds: HashMap::from_iter([
+                ("B".to_string(), 0.25),
+                ("b".to_string(), 0.25),
+                ("K".to_string(), 0.2),
+                ("k".to_string(), 0.3),
+                ("N".to_string(), 0.15),
+                ("n".to_string(), 0.1),
+                ("P".to_string(), 0.1),
+                ("p".to_string(), 0.55),
+                ("Q".to_string(), 0.3),
+                ("q".to_string(), 0.1),
+                ("R".to_string(), 0.05),
                 ("r".to_string(), 0.3),
             ]),
         }
@@ -65,7 +84,6 @@ impl ChessboardTracker {
 
         for entry in fs::read_dir("../chesscom/").unwrap() {
             if let Ok(entry) = entry {
-                // let file_name = entry.file_name().into_string().unwrap();
                 let file_name = entry
                     .path()
                     .file_stem()
@@ -109,12 +127,10 @@ impl ChessboardTracker {
             let mut piece_gray = Mat::default();
             imgproc::cvt_color(&piece_image, &mut piece_gray, imgproc::COLOR_BGR2GRAY, 0).unwrap();
 
-            // let mut mask = Mat::default();
             let mut channels: Vector<Mat> = Vector::new();
-            // if piece_image.channels() == 4 {
             split(&piece_image, &mut channels).unwrap();
             let mask = channels.get(3).unwrap();
-            // }
+
             let size = piece_gray.size().unwrap();
             let (h, w) = (size.height, size.width);
 
@@ -141,6 +157,7 @@ impl ChessboardTracker {
                 &Mat::default(),
             )?;
 
+            println!("{piece_name} {min_val}");
             while min_val < piece_threshold {
                 let top_left = min_loc;
 
@@ -167,12 +184,12 @@ impl ChessboardTracker {
                     false,
                 )?;
 
-                // highgui::imshow("abc", &board_clone);
-                // loop {
-                //     if highgui::wait_key(0)? == 48 {
-                //         break;
-                //     }
-                // }
+                highgui::imshow("abc", &board_clone);
+                loop {
+                    if highgui::wait_key(0)? == 48 {
+                        break;
+                    }
+                }
                 // let params = Vector::from_iter([0, 16]);
                 // imgcodecs::imwrite("rust_result.jpg", &board_clone, &params);
 
@@ -202,7 +219,7 @@ impl ChessboardTracker {
                     &Mat::default(),
                 )
                 .unwrap();
-                // println!("NEXT {min_val} {max_val} {:?} {:?}", min_loc, max_loc);
+                println!("NEXT {min_val} {max_val} {:?} {:?}", min_loc, max_loc);
             }
         }
         // let params = Vector::from_iter([0, 16]);
@@ -214,7 +231,7 @@ impl ChessboardTracker {
 fn main() {
     let total = std::time::Instant::now();
     let st = std::time::Instant::now();
-    let tracker = ChessboardTracker::new(Rect::new(440, 219, 758, 759));
+    let tracker = ChessboardTracker::chesscom_default();
     println!("tracker: {:?}", st.elapsed());
 
     let st = std::time::Instant::now();
@@ -224,6 +241,8 @@ fn main() {
     let st = std::time::Instant::now();
     let resized = utils::resize(&image, 360, 360).unwrap();
     println!("resize: {:?}", st.elapsed());
+    let params = Vector::from_iter([0, 16]);
+    imgcodecs::imwrite("aaa.jpg", &resized, &params);
 
     let st = std::time::Instant::now();
     let pieces = tracker.load_pieces().unwrap();
