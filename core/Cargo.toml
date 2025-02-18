@@ -1,0 +1,11 @@
+[package]
+name = "cheatess-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+device_query = "3.0.0"
+image = "0.24.9"
+opencv = "0.94.2"
+rdev = "0.5.3"
+screenshots = "0.8.10"

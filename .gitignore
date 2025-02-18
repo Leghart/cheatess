@@ -1,3 +1,7 @@
-.screenshot*
-current_board.png
-**__pycache__
+**__pycache__**
+.*_cache
+.vscode
+
+archive
+
+runner.py
