@@ -1,5 +1,5 @@
 use opencv::{
-    core::{min_max_loc, split, KeyPoint, Mat, Point, Rect, Scalar, Size, Vector},
+    core::{min_max_loc, split, KeyPoint, Mat, Point, Rect, Scalar, Size, Vector, CV_8UC4},
     features2d::{BFMatcher, ORB_ScoreType, ORB},
     highgui, imgcodecs, imgproc,
     prelude::*,
@@ -29,7 +29,7 @@ impl ChessboardTracker {
                 ("p".to_string(), 0.9),
                 ("Q".to_string(), 0.7),
                 ("q".to_string(), 0.3),
-                ("R".to_string(), 0.25),
+                ("R".to_string(), 0.4),
                 ("r".to_string(), 0.3),
             ]),
         }
@@ -42,10 +42,22 @@ impl ChessboardTracker {
             self.region.width as u32,
             self.region.height as u32,
         )?;
-        screen.save("screenshot.jpg").unwrap();
-        let image = Mat::from_slice(screen.as_raw())?;
 
-        Ok(image.try_clone()?)
+        let (width, height) = screen.dimensions();
+        let mut mat = Mat::new_rows_cols_with_default(
+            height as i32,
+            width as i32,
+            CV_8UC4,
+            Scalar::all(0.0),
+        )?;
+
+        let mat_data = mat.data_bytes_mut()?;
+        mat_data.copy_from_slice(&screen.as_raw());
+
+        let mut mat_bgr = Mat::default();
+        imgproc::cvt_color(&mat, &mut mat_bgr, imgproc::COLOR_RGBA2BGR, 0)?;
+
+        Ok(mat_bgr)
     }
 
     pub fn load_pieces(&self) -> Result<HashMap<String, (Mat, f64)>, Box<dyn std::error::Error>> {
@@ -200,17 +212,25 @@ impl ChessboardTracker {
 }
 
 fn main() {
-    // let screen_area = utils::get_screen_area().unwrap();
-    // println!("{:?}", screen_area);
+    let total = std::time::Instant::now();
+    let st = std::time::Instant::now();
     let tracker = ChessboardTracker::new(Rect::new(440, 219, 758, 759));
-    let _ = tracker.capture_screenshot().unwrap();
+    println!("tracker: {:?}", st.elapsed());
 
-    let image = imgcodecs::imread("screenshot.jpg", imgcodecs::IMREAD_UNCHANGED).unwrap();
+    let st = std::time::Instant::now();
+    let image = tracker.capture_screenshot().unwrap();
+    println!("screenshot: {:?}", st.elapsed());
 
+    let st = std::time::Instant::now();
     let resized = utils::resize(&image, 360, 360).unwrap();
+    println!("resize: {:?}", st.elapsed());
 
+    let st = std::time::Instant::now();
     let pieces = tracker.load_pieces().unwrap();
+    println!("laod pieces: {:?}", st.elapsed());
+
     let st = std::time::Instant::now();
     let result = tracker.process_image(&resized, pieces);
-    println!("{:?}", st.elapsed());
+    println!("process: {:?}", st.elapsed());
+    println!("TOTOAL: {:?}", total.elapsed());
 }
