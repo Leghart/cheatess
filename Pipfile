@@ -4,25 +4,11 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-scikit-learn = "*"
-stockfish = "*"
-numpy = "*"
-matplotlib = "*"
-torch = "*"
-keras = "*"
-tensorflow = "*"
-scikit-image = "*"
-tqdm = "*"
-pyautogui = "*"
-customtkinter = "*"
-screeninfo = "*"
-opencv-python = "*"
 
 [dev-packages]
 ruff = "*"
-black = "*"
-isort = "*"
 mypy = "*"
 
 [requires]
-python_version = "3.11.2"
+python_version = "3.12"
+python_full_version = "3.12.8"
