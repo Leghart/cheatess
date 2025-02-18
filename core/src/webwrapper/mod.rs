@@ -8,7 +8,6 @@ use screenshots::Screen;
 use std::collections::HashMap;
 use std::fs;
 
-use super::utils;
 pub mod chesscom;
 pub mod lichess;
 use super::image::ImageProcessing;
@@ -74,7 +73,7 @@ pub trait ChessboardTrackerInterface: Default {
 
             if self.pieces_path() == "chesscom" && *piece_name == "p".to_string() {
                 //TODO!
-                piece_image = utils::resize(&piece_image, 43, 43).unwrap();
+                piece_image = ImageProcessing::resize(&piece_image, 43, 43).unwrap();
             }
 
             let board_gray = ImageProcessing::threshold(&board_image)?;

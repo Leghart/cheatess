@@ -61,6 +61,15 @@ impl ImageProcessing {
         Ok(())
     }
 
+    pub fn resize(image: &Mat, width: i32, height: i32) -> Result<Mat, Box<dyn std::error::Error>> {
+        let nsize = Size::new(width, height);
+
+        let mut resized = Mat::default();
+        imgproc::resize(&image, &mut resized, nsize, 0.0, 0.0, imgproc::INTER_LINEAR)?;
+
+        Ok(resized)
+    }
+
     // pub fn put_text() -> Result<(), Box<dyn std::error::Error>> {}
 
     pub fn threshold(image: &Mat) -> Result<Mat, Box<dyn std::error::Error>> {

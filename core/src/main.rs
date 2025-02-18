@@ -1,8 +1,8 @@
 mod image;
-pub mod utils;
 pub mod webwrapper;
 
 use crate::webwrapper::ChessboardTrackerInterface;
+use image::ImageProcessing;
 use webwrapper::chesscom::ChesscomWrapper;
 
 fn main() {
@@ -16,7 +16,7 @@ fn main() {
     println!("screenshot: {:?}", st.elapsed());
 
     let st = std::time::Instant::now();
-    let resized = utils::resize(&image, 360, 360).unwrap();
+    let resized = ImageProcessing::resize(&image, 360, 360).unwrap();
     println!("resize: {:?}", st.elapsed());
     // let params = Vector::from_iter([0, 16]);
     // imgcodecs::imwrite("aaa.jpg", &resized, &params);
