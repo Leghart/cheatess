@@ -298,62 +298,6 @@ pub fn check_if_board_was_changed(
     return false;
 }
 
-// pub fn runner() {
-//     println!("Take a screenshot");
-//     let selection = get_screen_area().unwrap();
-//     println!("Time to play the gaaaaame...");
-//     let ref_image: ImageBuffer<Luma<u8>, Vec<u8>> = {
-//         let raw_image = take_screenshot(&selection).unwrap();
-//         let binary_image = to_binary(&raw_image, 30);
-//         trimm(&binary_image)
-//         // binary_image
-//     };
-
-//     let mut previous_board = extract_board_state(ref_image).unwrap();
-
-//     loop {
-//         std::thread::sleep(std::time::Duration::from_millis(100));
-//         let start_time = std::time::Instant::now();
-
-//         let new_image = {
-//             let _raw_image = take_screenshot(&selection).unwrap();
-//             let _binary_image = to_binary(&_raw_image, 30);
-//             trimm(&_binary_image)
-//             // _binary_image
-//             // TODO: change trim to updated selecion area with trimmed dimensions
-//         };
-//         new_image.save(std::path::Path::new("updated.png")).unwrap(); // tmp
-
-//         let current_result = extract_board_state(new_image);
-
-//         if current_result.is_err() {
-//             let e = current_result.err().unwrap();
-//             println!("Border error {:?}", e);
-//             continue;
-//         }
-
-//         let current = current_result.unwrap();
-
-//         if check_if_board_was_changed(&previous_board, &current) {
-//             let move_result = detect_move(&previous_board, &current);
-//             if move_result.is_err() {
-//                 // previous_board = current;
-//                 let e = move_result.err().unwrap();
-//                 println!("Move error: {e}");
-//                 println!("BEFORE: {:?}", previous_board);
-//                 println!("AFTER: {:?}", current);
-//                 // break;
-//                 continue;
-//             }
-//             let (start, end) = move_result.unwrap();
-//             let start_pos = pixel_to_chess_coord(start.0, start.1);
-//             let end_pos = pixel_to_chess_coord(end.0, end.1);
-//             println!("{} -> {} [{:?}]", start_pos, end_pos, start_time.elapsed());
-//             previous_board = current;
-//         }
-//     }
-// }
-
 pub fn to_mat(image: &ImageBuffer<Rgba<u8>, Vec<u8>>) -> Mat {
     let (img_width, img_height) = image.dimensions();
     let img_data = image.to_vec();

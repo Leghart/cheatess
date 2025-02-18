@@ -1,51 +1,56 @@
+use image::{ImageBuffer, Rgba};
 use opencv::{
-    core::{min_max_loc, split, Mat, Point, Rect, Scalar, Size, Vector},
+    core::{min_max_loc, split, Mat, Point, Rect, Scalar, Size, Vector, CV_8UC4},
+    highgui::{self, destroy_window},
     imgcodecs, imgproc,
     prelude::*,
 };
-use std::collections::HashMap;
 
-pub struct ImageProcessing {
-    pieces_images: HashMap<char, (Mat, f64)>,
-    pieces_thresholds: HashMap<char, f64>,
-}
+pub struct ImageProcessing {}
 
 impl ImageProcessing {
-    // pub fn new() -> Self {
-    //     ImageProcessing {
-    //         pieces_images: HashMap::new(),
-    //         pieces_thresholds: HashMap::new(),
-    //     }
-    // }
-
-    pub fn default() -> Self {
-        let pieces_thresholds: HashMap<char, f64> = [
-            ('B', 0.2),
-            ('b', 0.3),
-            ('K', 0.2),
-            ('k', 0.2),
-            ('N', 0.1),
-            ('n', 0.2),
-            ('P', 0.15),
-            ('p', 0.3),
-            ('Q', 0.2),
-            ('q', 0.2),
-            ('R', 0.2),
-            ('r', 0.2),
-        ]
-        .iter()
-        .cloned()
-        .collect();
-        ImageProcessing {
-            pieces_thresholds,
-            pieces_images: HashMap::new(),
-        }
+    pub fn read(path: &str) -> Result<Mat, Box<dyn std::error::Error>> {
+        Ok(imgcodecs::imread(path, imgcodecs::IMREAD_UNCHANGED)?)
+    }
+    pub fn write(path: &str, image: &Mat) -> Result<bool, Box<dyn std::error::Error>> {
+        let params = Vector::from_iter([0, 16]);
+        Ok(imgcodecs::imwrite(path, &image, &params)?)
     }
 
-    //     Scalar::new(255.0, 0.0, 0.0, 0.0) // Red for black pieces
-    //     Scalar::new(0.0, 0.0, 255.0, 0.0) // Blue for white pieces
-    fn draw_box(
-        &self,
+    pub fn show(image: &Mat, destroy: bool) -> Result<(), Box<dyn std::error::Error>> {
+        highgui::imshow("test_window", &image)?;
+        loop {
+            if highgui::wait_key(0)? == 48 {
+                break;
+            }
+        }
+        if destroy {
+            destroy_window("test_window")?;
+        }
+        Ok(())
+    }
+
+    pub fn image_buffer_to_mat(
+        buffer: ImageBuffer<Rgba<u8>, Vec<u8>>,
+    ) -> Result<Mat, Box<dyn std::error::Error>> {
+        let (width, height) = buffer.dimensions();
+        let mut mat = Mat::new_rows_cols_with_default(
+            height as i32,
+            width as i32,
+            CV_8UC4,
+            Scalar::all(0.0),
+        )?;
+
+        let mat_data = mat.data_bytes_mut()?;
+        mat_data.copy_from_slice(&buffer.as_raw());
+
+        let mut mat_bgr = Mat::default();
+        imgproc::cvt_color(&mat, &mut mat_bgr, imgproc::COLOR_RGBA2BGR, 0)?;
+
+        Ok(mat_bgr)
+    }
+
+    pub fn draw_box(
         image: &mut Mat,
         start_point: &Point,
         size: &Size,
@@ -56,157 +61,50 @@ impl ImageProcessing {
         Ok(())
     }
 
-    fn threshold_image(&self, image: &Mat) -> Result<Mat, Box<dyn std::error::Error>> {
+    // pub fn put_text() -> Result<(), Box<dyn std::error::Error>> {}
+
+    pub fn threshold(image: &Mat) -> Result<Mat, Box<dyn std::error::Error>> {
         let mut thresholded = Mat::default();
         imgproc::cvt_color(&image, &mut thresholded, imgproc::COLOR_BGR2GRAY, 0)?;
-        // imgproc::adaptive_threshold(
-        //     &image,
-        //     &mut thresholded,
-        //     255.0,
-        //     imgproc::ADAPTIVE_THRESH_GAUSSIAN_C,
-        //     imgproc::THRESH_BINARY,
-        //     11,
-        //     2.0,
-        // )?;
 
         Ok(thresholded)
     }
 
-    fn get_mask(&self, image: &Mat) -> Result<Mat, Box<dyn std::error::Error>> {
+    pub fn match_template(
+        image_bg: &Mat,
+        image_fg: &Mat,
+    ) -> Result<Mat, Box<dyn std::error::Error>> {
+        let mask = ImageProcessing::get_mask(&image_fg)?;
+        let mut matched = Mat::default();
+
+        imgproc::match_template(
+            &image_bg,
+            &image_fg,
+            &mut matched,
+            imgproc::TM_SQDIFF_NORMED,
+            &mask,
+        )?;
+        Ok(matched)
+    }
+
+    fn get_mask(image: &Mat) -> Result<Mat, Box<dyn std::error::Error>> {
         let mut mask = Mat::default();
         let mut channels: Vector<Mat> = Vector::new();
-        if image.channels() == 4 {
-            split(&image, &mut channels)?;
-            mask = channels.get(3)?;
-        }
+        split(&image, &mut channels)?;
+        mask = channels.get(3)?;
+
         Ok(mask)
     }
+}
 
-    fn save_image(&self, image: &Mat, path: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let params = Vector::from_iter([0, 16]);
-        imgcodecs::imwrite(path, &image, &params)?;
-        Ok(())
-    }
+fn pixels_to_board(point: Point, size: &Size, piece: &char, board: &mut [[char; 8]; 8]) {
+    let tile_width = size.width / 8;
+    let tile_height = size.height / 8;
 
-    fn set_pieces_thresholds(&mut self, pieces_thresholds: HashMap<char, f64>) {
-        self.pieces_thresholds = pieces_thresholds;
-    }
+    let col = (point.x / tile_width).clamp(0, 7);
+    let row = (7 - (point.y / tile_height)).clamp(0, 7);
 
-    pub fn load_piece_images(&mut self, dir_path: &str) -> Result<(), Box<dyn std::error::Error>> {
-        assert_ne!(self.pieces_thresholds.len(), 0);
-        // TODO: change mapping name of pieces
-        let mut chess_piece_images = HashMap::new();
-
-        for entry in std::fs::read_dir(dir_path).unwrap() {
-            let path = entry.unwrap().path();
-            let base_name = path.file_name().unwrap().to_str().unwrap();
-            let piece_name = base_name.chars().next().unwrap();
-
-            let piece_image =
-                imgcodecs::imread(path.to_str().unwrap(), imgcodecs::IMREAD_UNCHANGED)?;
-            if let Some(&threshold) = self.pieces_thresholds.get(&piece_name) {
-                chess_piece_images.insert(piece_name, (piece_image, threshold));
-            }
-        }
-        self.pieces_images = chess_piece_images;
-        Ok(())
-    }
-
-    fn load_pieces_thresholds(&self) -> Result<(), Box<dyn std::error::Error>> {
-        Ok(())
-    }
-
-    pub fn load_image(&self, path: &str) -> Result<Mat, Box<dyn std::error::Error>> {
-        let image = imgcodecs::imread(path, imgcodecs::IMREAD_COLOR)?;
-        Ok(image)
-    }
-
-    pub fn image_to_board(
-        &self,
-        image: &Mat,
-    ) -> Result<[[char; 8]; 8], Box<dyn std::error::Error>> {
-        let mut board: [[char; 8]; 8] = [[' '; 8]; 8];
-
-        for (piece_name, (piece_image, threshold)) in &self.pieces_images {
-            let gray_piece = self.threshold_image(&piece_image)?;
-            let gray_board = self.threshold_image(&image)?;
-            let mask = self.get_mask(&piece_image)?;
-
-            let size = gray_piece.size()?;
-            let (h, w) = (size.height, size.width);
-
-            let mut result = Mat::default();
-            imgproc::match_template(
-                &gray_board,
-                &gray_piece,
-                &mut result,
-                imgproc::TM_SQDIFF_NORMED,
-                &mask,
-            )?;
-
-            let mut min_val = 0.0;
-            let mut max_val = 0.0;
-            let mut min_loc = Point::default();
-            let mut max_loc = Point::default();
-
-            let mask = Mat::default();
-            min_max_loc(
-                &result,
-                Some(&mut min_val),
-                Some(&mut max_val),
-                Some(&mut min_loc),
-                Some(&mut max_loc),
-                &mask,
-            )?;
-
-            let mut ctr = 0;
-            while min_val < *threshold {
-                if ctr >= 10 {
-                    break;
-                }
-                let top_left = min_loc;
-
-                self.pixels_to_board(top_left, &result.size().unwrap(), piece_name, &mut board);
-
-                let mut h1 = top_left.y - h / 2;
-                h1 = h1.max(0).min(result.rows() - 1);
-
-                let mut h2 = top_left.y + h / 2 + 1;
-                h2 = h2.max(0).min(result.rows() - 1);
-
-                let mut w1 = top_left.x - w / 2;
-                w1 = w1.max(0).min(result.cols() - 1);
-
-                let mut w2 = top_left.x + w / 2 + 1;
-                w2 = w2.max(0).min(result.cols() - 1);
-
-                let mut result_slice = result.roi_mut(Rect::new(w1, h1, w2 - w1, h2 - h1))?;
-                result_slice.set_to(&Scalar::new(1.0, 0.0, 0.0, 0.0), &Mat::default())?;
-
-                min_max_loc(
-                    &result,
-                    Some(&mut min_val),
-                    Some(&mut max_val),
-                    Some(&mut min_loc),
-                    Some(&mut max_loc),
-                    &Mat::default(),
-                )?;
-                ctr += 1;
-            }
-        }
-
-        Ok(board)
-    }
-
-    fn pixels_to_board(&self, point: Point, size: &Size, piece: &char, board: &mut [[char; 8]; 8]) {
-        let tile_width = size.width / 8;
-        let tile_height = size.height / 8;
-
-        let col = (point.x / tile_width).clamp(0, 7);
-        let row = (7 - (point.y / tile_height)).clamp(0, 7);
-
-        board[row as usize][col as usize] = *piece;
-    }
+    board[row as usize][col as usize] = *piece;
 }
 
 fn pos_to_algebraic(row: usize, col: usize) -> String {
