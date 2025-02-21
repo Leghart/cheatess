@@ -1,3 +1,4 @@
+mod engine;
 mod image;
 pub mod webwrapper;
 
@@ -18,15 +19,17 @@ fn main() {
     let st = std::time::Instant::now();
     let resized = ImageProcessing::resize(&image, 360, 360).unwrap();
     println!("resize: {:?}", st.elapsed());
-    // let params = Vector::from_iter([0, 16]);
-    // imgcodecs::imwrite("aaa.jpg", &resized, &params);
 
     let st = std::time::Instant::now();
     let pieces = tracker.load_pieces().unwrap();
     println!("laod pieces: {:?}", st.elapsed());
 
     let st = std::time::Instant::now();
-    let result = tracker.process_image(&resized, pieces);
+    let result = tracker.process_image(&resized, pieces).unwrap();
+    // println!("{:?}", result);
+    for i in result.iter().rev() {
+        println!("{:?}", i);
+    }
     println!("process: {:?}", st.elapsed());
     println!("TOTOAL: {:?}", total.elapsed());
 }

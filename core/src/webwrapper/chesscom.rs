@@ -39,7 +39,7 @@ impl Default for ChesscomWrapper {
                 ("P".to_string(), 0.15),
                 ("p".to_string(), 0.9),
                 ("Q".to_string(), 0.7),
-                ("q".to_string(), 0.4),
+                ("q".to_string(), 0.5),
                 ("R".to_string(), 0.4),
                 ("r".to_string(), 0.3),
             ]),
