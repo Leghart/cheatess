@@ -9,3 +9,6 @@ image = "0.24.9"
 opencv = "0.94.2"
 rdev = "0.5.3"
 screenshots = "0.8.10"
+
+[dev-dependencies]
+rstest = "0.24.0"
