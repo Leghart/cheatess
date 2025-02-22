@@ -1,4 +1,5 @@
 mod engine;
+mod game;
 mod image;
 pub mod webwrapper;
 

@@ -5,19 +5,23 @@ use super::ChessboardTrackerInterface;
 
 pub struct ChesscomWrapper {
     region: Rect,
-    thresholds: HashMap<String, f64>,
+    thresholds: HashMap<char, f64>,
 }
 
 impl ChessboardTrackerInterface for ChesscomWrapper {
-    fn r#type(&self) -> super::WrapperType {
-        super::WrapperType::Chesscom
+    fn new(region: Rect, thresholds: HashMap<char, f64>) -> Self {
+        ChesscomWrapper { region, thresholds }
+    }
+
+    fn mode(&self) -> super::WrapperMode {
+        super::WrapperMode::Chesscom
     }
 
     fn get_region(&self) -> &Rect {
         &self.region
     }
 
-    fn get_thresholds(&self) -> &HashMap<String, f64> {
+    fn get_thresholds(&self) -> &HashMap<char, f64> {
         &self.thresholds
     }
     fn pieces_path(&self) -> &'static str {
@@ -30,18 +34,18 @@ impl Default for ChesscomWrapper {
         ChesscomWrapper {
             region: Rect::new(440, 219, 758, 759),
             thresholds: HashMap::from_iter([
-                ("B".to_string(), 0.35),
-                ("b".to_string(), 0.55),
-                ("K".to_string(), 0.2),
-                ("k".to_string(), 0.3),
-                ("N".to_string(), 0.1),
-                ("n".to_string(), 0.3),
-                ("P".to_string(), 0.15),
-                ("p".to_string(), 0.9),
-                ("Q".to_string(), 0.7),
-                ("q".to_string(), 0.5),
-                ("R".to_string(), 0.4),
-                ("r".to_string(), 0.3),
+                ('B', 0.35),
+                ('b', 0.55),
+                ('K', 0.2),
+                ('k', 0.3),
+                ('N', 0.1),
+                ('n', 0.3),
+                ('P', 0.15),
+                ('p', 0.9),
+                ('Q', 0.7),
+                ('q', 0.5),
+                ('R', 0.4),
+                ('r', 0.3),
             ]),
         }
     }

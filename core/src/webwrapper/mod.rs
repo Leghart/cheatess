@@ -14,11 +14,13 @@ use super::engine::register_piece;
 use super::image::ImageProcessing;
 
 pub trait ChessboardTrackerInterface: Default {
-    fn r#type(&self) -> WrapperType;
+    fn new(area: Rect, thresholds: HashMap<char, f64>) -> Self;
+
+    fn mode(&self) -> WrapperMode;
 
     fn get_region(&self) -> &Rect;
 
-    fn get_thresholds(&self) -> &HashMap<String, f64>;
+    fn get_thresholds(&self) -> &HashMap<char, f64>;
 
     fn pieces_path(&self) -> &'static str;
 
@@ -52,7 +54,10 @@ pub trait ChessboardTrackerInterface: Default {
                 let img = ImageProcessing::read(&entry.path().to_str().unwrap())?;
                 pieces.insert(
                     file_name.clone(),
-                    (img, *thresholds.get(&file_name).unwrap()),
+                    (
+                        img,
+                        *thresholds.get(&file_name.chars().next().unwrap()).unwrap(),
+                    ),
                 );
             }
         }
@@ -71,7 +76,7 @@ pub trait ChessboardTrackerInterface: Default {
             let piece_threshold = pieces.get(piece_name).unwrap().clone().1;
             let mut piece_image = pieces.get(piece_name).unwrap().clone().0;
 
-            if self.pieces_path() == "chesscom" && *piece_name == "p".to_string() {
+            if self.mode() == WrapperMode::Chesscom && *piece_name == "p".to_string() {
                 piece_image = ImageProcessing::resize(&piece_image, 43, 43).unwrap();
             }
 
@@ -105,7 +110,7 @@ pub trait ChessboardTrackerInterface: Default {
                     (board_size.width, board_size.height),
                     &piece_name.chars().next().unwrap(),
                     &mut result,
-                );
+                )?;
 
                 let size = matched.size()?;
                 let top_x = top_left.x.max(0).min(size.width - 1);
@@ -151,7 +156,7 @@ pub trait ChessboardTrackerInterface: Default {
             let piece_threshold = pieces.get(piece_name).unwrap().clone().1;
             let mut piece_image = pieces.get(piece_name).unwrap().clone().0;
 
-            if self.pieces_path() == "chesscom" && *piece_name == "p".to_string() {
+            if self.mode() == WrapperMode::Chesscom && *piece_name == "p".to_string() {
                 piece_image = ImageProcessing::resize(&piece_image, 43, 43).unwrap();
             }
 
@@ -239,7 +244,8 @@ pub trait ChessboardTrackerInterface: Default {
     }
 }
 
-pub enum WrapperType {
+#[derive(PartialEq)]
+pub enum WrapperMode {
     Chesscom,
     Lichess,
 }
