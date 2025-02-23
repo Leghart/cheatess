@@ -1,15 +1,15 @@
-use opencv::core::Rect;
+use crate::utils::screen_region::ScreenRegion;
 use std::collections::HashMap;
 
 use super::ChessboardTrackerInterface;
 
 pub struct LichessWrapper {
-    region: Rect,
+    region: ScreenRegion,
     thresholds: HashMap<char, f64>,
 }
 
 impl ChessboardTrackerInterface for LichessWrapper {
-    fn new(region: Rect, thresholds: HashMap<char, f64>) -> Self {
+    fn new(region: ScreenRegion, thresholds: HashMap<char, f64>) -> Self {
         LichessWrapper { region, thresholds }
     }
 
@@ -17,7 +17,7 @@ impl ChessboardTrackerInterface for LichessWrapper {
         super::WrapperMode::Lichess
     }
 
-    fn get_region(&self) -> &Rect {
+    fn get_region(&self) -> &ScreenRegion {
         &self.region
     }
 
@@ -32,7 +32,7 @@ impl ChessboardTrackerInterface for LichessWrapper {
 impl Default for LichessWrapper {
     fn default() -> Self {
         LichessWrapper {
-            region: Rect::new(568, 218, 720, 720),
+            region: ScreenRegion::new(568, 218, 720, 720),
             thresholds: HashMap::from_iter([
                 ('B', 0.25),
                 ('b', 0.25),
