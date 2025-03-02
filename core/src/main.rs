@@ -2,25 +2,27 @@ mod config;
 mod engine;
 mod game;
 mod image;
+mod stockfish;
 mod utils;
 pub mod webwrapper;
 
 use crate::webwrapper::ChessboardTrackerInterface;
 use config::save_config;
 use image::ImageProcessing;
+use stockfish::Stockfish;
 use utils::file_system::RealFileSystem;
 use webwrapper::chesscom::ChesscomWrapper;
 
 fn main() {
-    // let conf = config::Config::new(
-    //     webwrapper::WrapperMode::Chesscom,
-    //     utils::screen_region::ScreenRegion::new(70, 70, 700, 700),
-    //     std::collections::HashMap::from_iter([('C', 0.6721)]),
-    //     false,
-    // )
-    // .unwrap();
-    // save_config(&conf, &mut RealFileSystem).unwrap();
+    let mut stock = Stockfish::new("/home/leghart/projects/chessify_utils/stockfish_15.1_linux_x64/stockfish-ubuntu-20.04-x86-64");
+    stock.init(None);
+    println!("init finished");
+    stock.set_elo_rating(1200);
+    let a = stock.get_parameters();
+    println!("{:#?}", a);
+}
 
+fn run() {
     let total = std::time::Instant::now();
     let st = std::time::Instant::now();
     let tracker = ChesscomWrapper::default();
@@ -43,4 +45,15 @@ fn main() {
 
     println!("process: {:?}", st.elapsed());
     println!("TOTOAL: {:?}", total.elapsed());
+}
+
+fn store_cfg() {
+    let conf = config::Config::new(
+        webwrapper::WrapperMode::Chesscom,
+        utils::screen_region::ScreenRegion::new(70, 70, 700, 700),
+        std::collections::HashMap::from_iter([('C', 0.6721)]),
+        false,
+    )
+    .unwrap();
+    save_config(&conf, &mut RealFileSystem).unwrap();
 }
