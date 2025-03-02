@@ -2,6 +2,7 @@
 .*_cache
 .vscode
 
+.config.json
 archive
 
 runner.py

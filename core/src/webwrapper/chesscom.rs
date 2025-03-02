@@ -1,15 +1,15 @@
-use opencv::core::Rect;
+use crate::utils::screen_region::ScreenRegion;
 use std::collections::HashMap;
 
 use super::ChessboardTrackerInterface;
 
 pub struct ChesscomWrapper {
-    region: Rect,
+    region: ScreenRegion,
     thresholds: HashMap<char, f64>,
 }
 
 impl ChessboardTrackerInterface for ChesscomWrapper {
-    fn new(region: Rect, thresholds: HashMap<char, f64>) -> Self {
+    fn new(region: ScreenRegion, thresholds: HashMap<char, f64>) -> Self {
         ChesscomWrapper { region, thresholds }
     }
 
@@ -17,7 +17,7 @@ impl ChessboardTrackerInterface for ChesscomWrapper {
         super::WrapperMode::Chesscom
     }
 
-    fn get_region(&self) -> &Rect {
+    fn get_region(&self) -> &ScreenRegion {
         &self.region
     }
 
@@ -32,7 +32,7 @@ impl ChessboardTrackerInterface for ChesscomWrapper {
 impl Default for ChesscomWrapper {
     fn default() -> Self {
         ChesscomWrapper {
-            region: Rect::new(440, 219, 758, 759),
+            region: ScreenRegion::new(440, 219, 758, 759),
             thresholds: HashMap::from_iter([
                 ('B', 0.35),
                 ('b', 0.55),

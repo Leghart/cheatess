@@ -1,3 +1,6 @@
+extern crate serde;
+
+use crate::utils::screen_region::ScreenRegion;
 use opencv::{
     core::{min_max_loc, Mat, Point, Rect, Scalar},
     imgproc,
@@ -13,25 +16,35 @@ pub mod lichess;
 use super::engine::register_piece;
 use super::image::ImageProcessing;
 
+#[derive(PartialEq, serde::Serialize, serde::Deserialize, Debug)]
+pub enum WrapperMode {
+    Chesscom,
+    Lichess,
+}
+
+impl std::fmt::Display for WrapperMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", format!("{:?}", self).to_lowercase())
+    }
+}
+
 pub trait ChessboardTrackerInterface: Default {
-    fn new(area: Rect, thresholds: HashMap<char, f64>) -> Self;
+    fn new(area: ScreenRegion, thresholds: HashMap<char, f64>) -> Self;
 
     fn mode(&self) -> WrapperMode;
 
-    fn get_region(&self) -> &Rect;
+    fn get_region(&self) -> &ScreenRegion;
 
     fn get_thresholds(&self) -> &HashMap<char, f64>;
 
     fn pieces_path(&self) -> &'static str;
 
     fn capture_screenshot(&self) -> Result<Mat, Box<dyn std::error::Error>> {
-        let region = self.get_region();
-        let screen = Screen::all()?.first().unwrap().capture_area(
-            region.x,
-            region.y,
-            region.width as u32,
-            region.height as u32,
-        )?;
+        let (x, y, width, height) = self.get_region().values();
+        let screen = Screen::all()?
+            .first()
+            .unwrap()
+            .capture_area(x, y, width, height)?;
 
         Ok(ImageProcessing::image_buffer_to_mat(screen)?)
     }
@@ -242,10 +255,4 @@ pub trait ChessboardTrackerInterface: Default {
 
         Ok(())
     }
-}
-
-#[derive(PartialEq)]
-pub enum WrapperMode {
-    Chesscom,
-    Lichess,
 }
