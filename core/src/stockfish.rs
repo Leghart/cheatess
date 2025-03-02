@@ -1,6 +1,7 @@
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
-
+use std::io::{BufRead, BufReader, Read, Write};
+use std::sync::{Arc, Mutex};
+use std::thread;
 use subprocess::{Popen, PopenConfig, Redirection};
 
 pub struct Stockfish {
@@ -116,21 +117,13 @@ impl Stockfish {
                 new_param_values.insert("Hash".to_string(), hash_value);
             }
         }
-        // println!("SANITY: {}", self.read_line());
-        println!("endless");
-        // let tmp = self.read_line();
-        // println!("TMP: {tmp}");
-        // println!("SANITY: {}", self.read_line());
 
-        println!("{:#?}", new_param_values);
         for (name, value) in new_param_values.iter() {
-            println!("run for {name} {value}");
             self.set_option(name, value, true);
         }
 
-        // TODO!
-        // let pos = self.get_fen_position();
-        // self.set_fen_position(&pos, false);
+        let pos = self.get_fen_position();
+        self.set_fen_position(&pos, false);
     }
 
     fn set_fen_position(&mut self, fen: &str, token: bool) {
@@ -138,7 +131,7 @@ impl Stockfish {
         self.put(&format!("position fen {fen}"));
     }
 
-    fn prepare_for_new_position(&mut self, send_token: bool) {
+    pub fn prepare_for_new_position(&mut self, send_token: bool) {
         if send_token {
             self.put("ucinewgame");
         }
@@ -158,10 +151,9 @@ impl Stockfish {
         self.is_ready();
     }
 
-    fn is_ready(&mut self) {
+    pub fn is_ready(&mut self) {
         self.put("isready");
         let out = self.read_line();
-        println!("OUTPUT: {out}");
         while out != "readyok" {
             continue;
         }
@@ -175,16 +167,41 @@ impl Stockfish {
                 Ok(0) => panic!(),
                 Ok(_) => {
                     let tmp = line.trim().to_string();
+                    println!("<<: {}", tmp);
                     tmp
                 }
                 Err(e) => {
-                    eprintln!("Error reading line: {}", e);
                     panic!()
                 }
             }
         } else {
-            eprintln!("No stdout available for reading");
             panic!()
+        }
+    }
+
+    // TODO: terrible (think how to solve blocking bufread)
+    pub fn get_fen_position(&mut self) -> String {
+        self.put("d");
+        if let Some(stdout) = self.proc.stdout.as_mut() {
+            let reader = BufReader::new(stdout);
+
+            for line_result in reader.lines() {
+                match line_result {
+                    Ok(line) => {
+                        let trimmed = line.trim().to_string();
+                        if trimmed.contains("Fen: ") {
+                            return trimmed[5..].to_string();
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Error reading line: {}", e);
+                        panic!();
+                    }
+                }
+            }
+            panic!();
+        } else {
+            panic!();
         }
     }
 
@@ -240,20 +257,20 @@ impl Stockfish {
         Some(Vec::new())
     }
 
-    fn get_fen_position(&mut self) -> String {
-        self.put("d");
-        loop {
-            let text = self.read_line();
-            println!("text: {text}");
-            let splitted: Vec<&str> = text.split(" ").collect();
-            if splitted[0] == "Fen:" {
-                while !self.read_line().contains("Checkers") {
-                    continue;
-                }
-                return splitted[1..].join(" ");
-            }
-        }
-    }
+    // pub fn get_fen_position(&mut self) -> String {
+    // self.put("d");
+    // loop {
+    // let text = self.read_line();
+    // let text: Vec<&str> = text.split(" ").collect();
+    // println!("splited: {:?}", text);
+    // if text[0] == "Fen:" {
+    // while !self.read_line().contains("Checkers") {
+    // continue;
+    // }
+    // return text[1..].join(" ");
+    // }
+    // }
+    // }
 
     pub fn get_evaluation(&mut self) -> HashMap<String, String> {
         let mut evaluation: HashMap<String, String> = HashMap::new();
@@ -265,7 +282,7 @@ impl Stockfish {
         self.put(&format!("position {fen_position}"));
         self.go();
 
-        while true {
+        loop {
             let raw = self.read_line();
             let text: Vec<&str> = raw.split(" ").collect();
             if text[0] == "info" {
@@ -280,7 +297,6 @@ impl Stockfish {
                 return evaluation;
             }
         }
-        panic!("TODO");
     }
 
     pub fn get_parameters(&self) -> &HashMap<String, String> {
