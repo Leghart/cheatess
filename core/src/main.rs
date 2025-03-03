@@ -1,6 +1,7 @@
 mod config;
 mod engine;
 mod image;
+mod stockfish;
 mod utils;
 pub mod webwrapper;
 use zmq::Socket;
@@ -54,6 +55,7 @@ fn _save_config() {
         utils::screen_region::ScreenRegion::new(70, 70, 700, 700),
         std::collections::HashMap::from_iter([('C', 0.6721)]),
         false,
+        String::new(),
     )
     .unwrap();
     save_config(&conf, &mut RealFileSystem).unwrap();
@@ -82,4 +84,16 @@ fn _single_run() {
 
     println!("process: {:?}", st.elapsed());
     println!("TOTOAL: {:?}", total.elapsed());
+}
+
+fn store_cfg() {
+    let conf = config::Config::new(
+        webwrapper::WrapperMode::Chesscom,
+        utils::screen_region::ScreenRegion::new(70, 70, 700, 700),
+        std::collections::HashMap::from_iter([('C', 0.6721)]),
+        false,
+        String::new(),
+    )
+    .unwrap();
+    save_config(&conf, &mut RealFileSystem).unwrap();
 }
