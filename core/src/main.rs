@@ -10,6 +10,7 @@ use crate::webwrapper::ChessboardTrackerInterface;
 use config::save_config;
 use image::ImageProcessing;
 use serde::{Deserialize, Serialize};
+
 use utils::file_system::RealFileSystem;
 use webwrapper::chesscom::ChesscomWrapper;
 
@@ -26,27 +27,39 @@ struct ProtocolInterface {
     message: String,
 }
 
-fn start(socket: &Socket) {
-    loop {
-        let msg = socket.recv_string(0).expect("none").unwrap();
-
-        let data: ProtocolInterface = serde_json::from_str(&msg).unwrap();
-        let response = ProtocolInterface {
-            cmd: Command::Ping,
-            message: format!("Hello from Rust, {}", data.message),
-        };
-
-        let response_str = serde_json::to_string(&response).unwrap();
-        socket.send(&response_str, 0).expect("sendind error");
-    }
-}
-
 fn main() {
     let context = zmq::Context::new();
     let socket = context.socket(zmq::REP).expect("Fatal error");
     socket.bind("tcp://127.0.0.1:5555").expect("Fatal error");
 
-    start(&socket);
+    loop {
+        let msg = recv(&socket);
+
+        match msg.cmd {
+            Command::Configurate => {}
+            Command::Ping => {
+                let response = ProtocolInterface {
+                    cmd: Command::Ping,
+                    message: format!("ping"),
+                };
+                send(&socket, response);
+            }
+            Command::Game => {
+                // will block main thread
+            }
+        }
+    }
+}
+
+fn recv(socket: &Socket) -> ProtocolInterface {
+    let msg = socket.recv_string(0).expect("none").unwrap();
+
+    serde_json::from_str(&msg).unwrap()
+}
+
+fn send(socket: &Socket, msg: ProtocolInterface) {
+    let response_str = serde_json::to_string(&msg).unwrap();
+    socket.send(&response_str, 0).expect("sendind error");
 }
 
 fn _save_config() {
