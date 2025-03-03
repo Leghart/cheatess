@@ -18,6 +18,7 @@ pub struct Config {
     region: ScreenRegion,
     thresholds: HashMap<char, f64>,
     custom_pieces: bool,
+    stockfish_path: String,
 }
 
 impl Config {
@@ -27,6 +28,7 @@ impl Config {
         region: ScreenRegion,
         thresholds: HashMap<char, f64>,
         custom_pieces: bool,
+        stockfish_path: String,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         validate_region(&region)?;
         validate_thresholds(&thresholds)?;
@@ -37,6 +39,7 @@ impl Config {
             region,
             thresholds,
             custom_pieces,
+            stockfish_path,
         })
     }
 
@@ -164,6 +167,7 @@ mod tests {
             thresholds: valid_thresholds,
             region: ScreenRegion::new(1, 1, 100, 200),
             custom_pieces: false,
+            stockfish_path: String::from(".."),
         }
     }
 
