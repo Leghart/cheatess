@@ -13,14 +13,7 @@ use stockfish::Stockfish;
 use utils::file_system::RealFileSystem;
 use webwrapper::chesscom::ChesscomWrapper;
 
-fn main() {
-    let mut stock = Stockfish::new("/home/leghart/projects/chessify_utils/stockfish_15.1_linux_x64/stockfish-ubuntu-20.04-x86-64");
-    stock.init(None);
-    println!("init finished");
-    stock.set_elo_rating(1200);
-    let a = stock.get_parameters();
-    println!("{:#?}", a);
-}
+fn main() {}
 
 fn run() {
     let total = std::time::Instant::now();
@@ -53,6 +46,7 @@ fn store_cfg() {
         utils::screen_region::ScreenRegion::new(70, 70, 700, 700),
         std::collections::HashMap::from_iter([('C', 0.6721)]),
         false,
+        String::new(),
     )
     .unwrap();
     save_config(&conf, &mut RealFileSystem).unwrap();

@@ -1,9 +1,17 @@
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Read, Write};
-use std::sync::{Arc, Mutex};
-use std::thread;
+use std::io::{BufRead, BufReader, Write};
 use subprocess::{Popen, PopenConfig, Redirection};
 
+/// ```
+/// let mut stock = Stockfish::new("/home/leghart/projects/chessify_utils/stockfish_15.1_linux_x64/stockfish-ubuntu-20.04-x86-64");
+/// stock.set_elo_rating(2200);
+/// for _ in 0..25 {
+///     let t = std::time::Instant::now();
+///     let best_move = stock.get_best_move().unwrap();
+///     println!("best move: {best_move} {:?}", t.elapsed());
+///     stock.make_move(vec![best_move]);
+/// }
+/// ```
 pub struct Stockfish {
     proc: Popen,
     parameters: HashMap<String, String>,
@@ -13,9 +21,10 @@ pub struct Stockfish {
     version: String,
 }
 
+#[allow(dead_code)]
 impl Stockfish {
     pub fn new(exec_path: &str) -> Self {
-        let mut proc = Popen::create(
+        let proc = Popen::create(
             &[exec_path],
             PopenConfig {
                 stdin: Redirection::Pipe,
@@ -27,49 +36,141 @@ impl Stockfish {
         )
         .expect("error");
 
-        Stockfish {
+        let mut _self = Stockfish {
             proc,
             parameters: HashMap::new(),
-            depth: 15,
+            depth: 5,
             info: String::new(),
             quit_sent: false,
             version: String::new(),
-        }
-    }
+        };
 
-    pub fn init(&mut self, depth: Option<u8>) {
-        self.version = self.read_line();
-
-        if let Some(d) = depth {
-            self.depth = d;
-        }
-
-        self.put("uci");
-        let tmp = self.read_line();
-        println!("uci: {}", tmp);
+        _self.version = _self.read_line();
+        _self.put("uci");
+        let _ = _self.read_line(); // clear buffer
 
         let default_params: HashMap<String, String> = HashMap::from_iter([
             ("Debug Log File".to_string(), "".to_string()),
-            // ("Contempt".to_string(), "0".to_string()),
-            // ("Min Split Depth".to_string(), "0".to_string()),
             ("Threads".to_string(), "1".to_string()),
             ("Ponder".to_string(), "false".to_string()),
             ("Hash".to_string(), "16".to_string()),
             ("MultiPV".to_string(), "1".to_string()),
             ("Skill Level".to_string(), "20".to_string()),
             ("Move Overhead".to_string(), "10".to_string()),
-            // ("Minimum Thinking Time".to_string(), "20".to_string()),
             ("Slow Mover".to_string(), "100".to_string()),
             ("UCI_Chess960".to_string(), "false".to_string()),
             ("UCI_LimitStrength".to_string(), "false".to_string()),
             ("UCI_Elo".to_string(), "1350".to_string()),
         ]);
 
-        self.update_params(default_params);
+        _self.update_params(default_params);
+
+        _self
+    }
+
+    pub fn get_version(&self) -> &str {
+        &self.version
+    }
+
+    //TODO:
+    pub fn get_wdl_stats(&self) -> Option<Vec<String>> {
+        Some(Vec::new())
+    }
+
+    // TODO: to fix
+    pub fn get_evaluation(&mut self) -> HashMap<String, String> {
+        let mut evaluation: HashMap<String, String> = HashMap::new();
+        let fen_position = self.get_fen_position();
+        let compare = match fen_position.contains('w') {
+            true => 1,
+            false => -1,
+        };
+        self.put(&format!("position {fen_position}"));
+        self.go();
+
+        loop {
+            let raw = self.read_line();
+            let text: Vec<&str> = raw.split(" ").collect();
+            if text[0] == "info" {
+                for n in 0..text.len() - 1 {
+                    if text[n] == "score" {
+                        *evaluation.get_mut("type").unwrap() = text[n + 1].to_string();
+                        *evaluation.get_mut("value").unwrap() =
+                            (text[n + 2].parse::<isize>().unwrap() * compare).to_string();
+                    }
+                }
+            } else if text[0] == "bestmove" {
+                return evaluation;
+            }
+        }
+    }
+
+    pub fn get_parameters(&self) -> &HashMap<String, String> {
+        &self.parameters
+    }
+
+    pub fn set_skill_level(&mut self, level: usize) {
+        self.update_params(HashMap::from_iter([
+            ("UCI_LimitStrength".to_string(), "false".to_string()),
+            ("Skill level".to_string(), level.to_string()),
+        ]));
+    }
+
+    pub fn set_elo_rating(&mut self, rating: usize) {
+        self.update_params(HashMap::from_iter([
+            ("UCI_LimitStrength".to_string(), "true".to_string()),
+            ("UCI_Elo".to_string(), rating.to_string()),
+        ]));
+    }
+
+    // TODO?: add wtime & btime
+    pub fn get_best_move(&mut self) -> Option<String> {
+        self.go();
+        let best_move = self.get_move_from_proc();
+        best_move
+    }
+
+    pub fn make_move(&mut self, moves: Vec<String>) {
+        if moves.len() == 0 {
+            return;
+        }
+
+        self.prepare_for_new_position(false);
+        for _move in moves {
+            if !self.is_correct_move(&_move) {
+                panic!("TODO");
+            }
+            let pos = self.get_fen_position();
+            self.put(&format!("position fen {pos} moves {_move}"));
+        }
+    }
+
+    // TODO: terrible (think how to solve blocking bufread)
+    pub fn get_fen_position(&mut self) -> String {
+        self.put("d");
+        if let Some(stdout) = self.proc.stdout.as_mut() {
+            let reader = BufReader::new(stdout);
+
+            for line_result in reader.lines() {
+                match line_result {
+                    Ok(line) => {
+                        let trimmed = line.trim().to_string();
+                        if trimmed.contains("Fen: ") {
+                            return trimmed[5..].to_string();
+                        }
+                    }
+                    Err(_) => {
+                        panic!("TODO");
+                    }
+                }
+            }
+            panic!("TODO");
+        } else {
+            panic!("TODO");
+        }
     }
 
     fn put(&mut self, cmd: &str) {
-        println!("Sending {cmd}");
         if self.proc.stdin.is_none() {
             panic!("TODO");
         }
@@ -91,7 +192,7 @@ impl Stockfish {
         if !self.parameters.is_empty() {
             for key in new_param_values.keys() {
                 if !self.parameters.contains_key(key) {
-                    panic!("Key not exists"); //TODO!
+                    panic!("TODO"); //TODO!
                 }
             }
         }
@@ -131,7 +232,7 @@ impl Stockfish {
         self.put(&format!("position fen {fen}"));
     }
 
-    pub fn prepare_for_new_position(&mut self, send_token: bool) {
+    fn prepare_for_new_position(&mut self, send_token: bool) {
         if send_token {
             self.put("ucinewgame");
         }
@@ -151,7 +252,7 @@ impl Stockfish {
         self.is_ready();
     }
 
-    pub fn is_ready(&mut self) {
+    fn is_ready(&mut self) {
         self.put("isready");
         let out = self.read_line();
         while out != "readyok" {
@@ -159,49 +260,27 @@ impl Stockfish {
         }
     }
 
-    pub fn read_line(&mut self) -> String {
+    fn is_correct_move(&mut self, _move: &str) -> bool {
+        let old_info = self.info.clone();
+        self.put(&format!("go depth 1 searchmoves {_move}"));
+        let result = self.get_move_from_proc().is_some();
+        self.info = old_info;
+        return result;
+    }
+
+    fn read_line(&mut self) -> String {
         if let Some(stdout) = self.proc.stdout.as_mut() {
             let mut reader = BufReader::new(stdout);
             let mut line = String::new();
             match reader.read_line(&mut line) {
-                Ok(0) => panic!(),
-                Ok(_) => {
-                    let tmp = line.trim().to_string();
-                    println!("<<: {}", tmp);
-                    tmp
-                }
-                Err(e) => {
-                    panic!()
+                Ok(0) => panic!("TODO"),
+                Ok(_) => line.trim().to_string(),
+                Err(_) => {
+                    panic!("TODO")
                 }
             }
         } else {
-            panic!()
-        }
-    }
-
-    // TODO: terrible (think how to solve blocking bufread)
-    pub fn get_fen_position(&mut self) -> String {
-        self.put("d");
-        if let Some(stdout) = self.proc.stdout.as_mut() {
-            let reader = BufReader::new(stdout);
-
-            for line_result in reader.lines() {
-                match line_result {
-                    Ok(line) => {
-                        let trimmed = line.trim().to_string();
-                        if trimmed.contains("Fen: ") {
-                            return trimmed[5..].to_string();
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("Error reading line: {}", e);
-                        panic!();
-                    }
-                }
-            }
-            panic!();
-        } else {
-            panic!();
+            panic!("TODO")
         }
     }
 
@@ -213,93 +292,37 @@ impl Stockfish {
         self.put(&format!("go movetime {time}"));
     }
 
-    pub fn set_skill_level(&mut self, level: usize) {
-        self.update_params(HashMap::from_iter([
-            ("UCI_LimitStrength".to_string(), "false".to_string()),
-            ("Skill level".to_string(), level.to_string()),
-        ]));
-    }
-
-    pub fn set_elo_rating(&mut self, rating: usize) {
-        self.update_params(HashMap::from_iter([
-            ("UCI_LimitStrength".to_string(), "true".to_string()),
-            ("UCI_Elo".to_string(), rating.to_string()),
-        ]));
-    }
-
-    // TODO: add wtime & btime
-    pub fn get_best_move(&mut self) -> Option<String> {
-        self.go();
-        let best_move = self.get_move_from_proc();
-        best_move
-    }
-
+    // TODO: terrbile
     fn get_move_from_proc(&mut self) -> Option<String> {
         let mut last_text = String::from("");
-        while true {
-            let text = self.read_line();
-            let splitted: Vec<&str> = text.split(" ").collect();
-            if splitted[0] == "bestmove" {
-                self.info = last_text;
-                if splitted[1] == "(none)" {
-                    return None;
-                } else {
-                    return Some(splitted[1].to_string());
-                }
-            }
-            last_text = text;
-        }
-        None
-    }
-
-    // TODO
-    pub fn get_wdl_stats(&self) -> Option<Vec<String>> {
-        Some(Vec::new())
-    }
-
-    // pub fn get_fen_position(&mut self) -> String {
-    // self.put("d");
-    // loop {
-    // let text = self.read_line();
-    // let text: Vec<&str> = text.split(" ").collect();
-    // println!("splited: {:?}", text);
-    // if text[0] == "Fen:" {
-    // while !self.read_line().contains("Checkers") {
-    // continue;
-    // }
-    // return text[1..].join(" ");
-    // }
-    // }
-    // }
-
-    pub fn get_evaluation(&mut self) -> HashMap<String, String> {
-        let mut evaluation: HashMap<String, String> = HashMap::new();
-        let fen_position = self.get_fen_position();
-        let compare = match fen_position.contains('w') {
-            true => 1,
-            false => -1,
-        };
-        self.put(&format!("position {fen_position}"));
-        self.go();
-
-        loop {
-            let raw = self.read_line();
-            let text: Vec<&str> = raw.split(" ").collect();
-            if text[0] == "info" {
-                for n in 0..text.len() - 1 {
-                    if text[n] == "score" {
-                        *evaluation.get_mut("type").unwrap() = text[n + 1].to_string();
-                        *evaluation.get_mut("value").unwrap() =
-                            (text[n + 2].parse::<isize>().unwrap() * compare).to_string();
+        if let Some(stdout) = self.proc.stdout.as_mut() {
+            let reader = BufReader::new(stdout);
+            for line in reader.lines() {
+                match line {
+                    Ok(text) => {
+                        let splitted: Vec<&str> = text.split(" ").collect();
+                        if splitted[0] == "bestmove" {
+                            self.info = last_text;
+                            if splitted[1] == "(none)" {
+                                return None;
+                            } else {
+                                return Some(splitted[1].to_string());
+                            }
+                        }
+                        last_text = text;
                     }
+                    Err(_) => panic!("TODO"),
                 }
-            } else if text[0] == "bestmove" {
-                return evaluation;
             }
+            panic!("TODO")
+        } else {
+            panic!("TODO")
         }
     }
+}
 
-    pub fn get_parameters(&self) -> &HashMap<String, String> {
-        &self.parameters
+impl Drop for Stockfish {
+    fn drop(&mut self) {
+        self.put("quit");
     }
 }
