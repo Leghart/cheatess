@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import queue
 from enum import StrEnum
-from typing import Any, Optional, Type, TypeVar
+from typing import Any, Type, TypeVar
 
 T = TypeVar("T")
 

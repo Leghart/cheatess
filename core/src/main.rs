@@ -15,15 +15,17 @@ use utils::file_system::RealFileSystem;
 use webwrapper::chesscom::ChesscomWrapper;
 
 #[derive(Serialize, Deserialize, Debug)]
-enum Command {
+enum MsgKey {
     Configurate,
     Ping,
     Game,
+    Region,
+    Ok,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 struct ProtocolInterface {
-    cmd: Command,
+    key: MsgKey,
     message: String,
 }
 
@@ -35,25 +37,35 @@ fn main() {
     loop {
         let msg = recv(&socket);
 
-        match msg.cmd {
-            Command::Configurate => {}
-            Command::Ping => {
+        match msg.key {
+            MsgKey::Region => {
+                println!("AAA: {:?}", msg.message);
+                send(
+                    &socket,
+                    ProtocolInterface {
+                        key: MsgKey::Ok,
+                        message: String::new(),
+                    },
+                );
+            }
+            MsgKey::Configurate => {}
+            MsgKey::Ping => {
                 let response = ProtocolInterface {
-                    cmd: Command::Ping,
+                    key: MsgKey::Ping,
                     message: format!("ping"),
                 };
                 send(&socket, response);
             }
-            Command::Game => {
+            MsgKey::Game => {
                 // will block main thread
             }
+            MsgKey::Ok => {}
         }
     }
 }
 
 fn recv(socket: &Socket) -> ProtocolInterface {
     let msg = socket.recv_string(0).expect("none").unwrap();
-
     serde_json::from_str(&msg).unwrap()
 }
 

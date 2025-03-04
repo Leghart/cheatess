@@ -4,6 +4,7 @@ from .components.modals import HelpModal
 from .components.sidebar import SideBar
 from .components.tabview import TabView
 from .utils.cache_loader import Cache
+from .utils.context import Context
 
 # https://github.com/TomSchimansky/CustomTkinter/blob/master/examples/complex_example.py
 
@@ -15,6 +16,7 @@ class App(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.cache = Cache()
+        self.ctx = Context("127.0.0.1:5555")
 
         self.title("Cheatess")
         self.geometry(f"{900}x{730}")
