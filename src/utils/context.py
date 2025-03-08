@@ -8,10 +8,10 @@ import zmq
 
 class MsgKey(enum.StrEnum):
     Configurate = "Configurate"
-    Ping = "Ping"
     Game = "Game"
     Region = "Region"
     Ok = "Ok"
+    Ping = "Ping"
 
 
 @dataclasses.dataclass
@@ -41,4 +41,4 @@ class Context:
         response = self._socket.recv_string()
         data = json.loads(response)
 
-        return ProtocolInterface(key=data["key"], message=data["message"])
+        return ProtocolInterface(key=MsgKey(data["key"]), message=data["message"])

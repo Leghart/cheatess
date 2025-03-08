@@ -70,8 +70,6 @@ impl ImageProcessing {
         Ok(resized)
     }
 
-    // pub fn put_text() -> Result<(), Box<dyn std::error::Error>> {}
-
     pub fn threshold(image: &Mat) -> Result<Mat, Box<dyn std::error::Error>> {
         let mut thresholded = Mat::default();
         imgproc::cvt_color(image, &mut thresholded, imgproc::COLOR_BGR2GRAY, 0)?;

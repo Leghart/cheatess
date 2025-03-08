@@ -47,8 +47,8 @@ class SelectRegionButton(CustomButton):
         # self.engine_handler.scanning_thread = None
         # self.engine_handler.calculating_thread = None
         # self.engine_handler.board_coords = None
-        self.parent.snippet.start_x = self._snip_surface.canvasx(event.x)
-        self.parent.snippet.start_y = self._snip_surface.canvasy(event.y)
+        self.parent.snippet.start_x = int(self._snip_surface.canvasx(event.x))
+        self.parent.snippet.start_y = int(self._snip_surface.canvasy(event.y))
         self._snip_surface.create_rectangle(
             0, 0, 1, 1, outline="SkyBlue1", width=3, fill="grey60"
         )
@@ -69,7 +69,7 @@ class SelectRegionButton(CustomButton):
     def _on_button_release(self, event: tk.Event):
         if not self.parent.snippet.is_frame_set():
             return
-        # self.parent.engine_handler.board_coords = self.parent.snippet.get_frame()
+
         self.parent.stop.configure(
             state=(
                 "normal" if self.parent.engine_handler.is_loaded_coords else "disabled"
@@ -90,15 +90,9 @@ class SelectRegionButton(CustomButton):
                 key=MsgKey.Region, message=str(self.parent.snippet.get_frame())
             ).serialize()
         )
-        assert self.parent.master.ctx.recv().key is MsgKey.Ok
-        return event
-        self.engine_handler.take_screenshot()
-        self.engine_handler.save_board_image()
-        self.master.tabview.scanning_view.create_updating_image_thread()
-
-        self._snip_surface.destroy()
-        self.master_screen.withdraw()
-        self.master.deiconify()
+        res = self.parent.master.ctx.recv()
+        if res.key is not MsgKey.Ok:
+            print("ERROR")
 
         return event
 
@@ -146,9 +140,15 @@ class ClearLogsButton(CustomButton):
 
 class PingButton(CustomButton):
     def __init__(self, parent: SideBar):
+        self.parent = parent
         super().__init__(parent, text="ping", command=self.action, fg_color="blue")
         self.grid(row=1, column=1, padx=20, pady=10)
         self.configure(state="")
 
     def action(self):
-        print("todo")
+        self.parent.master.ctx.send(
+            ProtocolInterface(key=MsgKey.Ping, message="").serialize()
+        )
+        res = self.parent.master.ctx.recv()
+
+        print(res)

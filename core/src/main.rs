@@ -3,58 +3,47 @@ mod engine;
 mod image;
 mod stockfish;
 mod utils;
+
 pub mod webwrapper;
-use zmq::Socket;
 
 use crate::webwrapper::ChessboardTrackerInterface;
 use config::save_config;
 use image::ImageProcessing;
-use serde::{Deserialize, Serialize};
 
-use utils::file_system::RealFileSystem;
+use utils::{
+    context::{Context, MsgKey, ProtocolInterface},
+    file_system::RealFileSystem,
+    screen_region::ScreenRegion,
+};
 use webwrapper::chesscom::ChesscomWrapper;
 
-#[derive(Serialize, Deserialize, Debug)]
-enum MsgKey {
-    Configurate,
-    Ping,
-    Game,
-    Region,
-    Ok,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct ProtocolInterface {
-    key: MsgKey,
-    message: String,
-}
-
 fn main() {
-    let context = zmq::Context::new();
-    let socket = context.socket(zmq::REP).expect("Fatal error");
-    socket.bind("tcp://127.0.0.1:5555").expect("Fatal error");
+    let mut ctx = Context::new();
+    ctx.connect();
+
+    let mut region = ScreenRegion::new(0, 0, 0, 0);
 
     loop {
-        let msg = recv(&socket);
+        let msg = ctx.recv();
 
         match msg.key {
             MsgKey::Region => {
-                println!("AAA: {:?}", msg.message);
-                send(
-                    &socket,
-                    ProtocolInterface {
-                        key: MsgKey::Ok,
-                        message: String::new(),
-                    },
-                );
+                match ScreenRegion::try_from(msg.message) {
+                    Ok(_region) => region = _region,
+                    Err(err) => eprintln!("{err}"),
+                };
+                ctx.send(ProtocolInterface {
+                    key: MsgKey::Ok,
+                    message: String::new(),
+                });
             }
             MsgKey::Configurate => {}
             MsgKey::Ping => {
                 let response = ProtocolInterface {
-                    key: MsgKey::Ping,
-                    message: format!("ping"),
+                    key: MsgKey::Ok,
+                    message: format!("{:?}", region),
                 };
-                send(&socket, response);
+                ctx.send(response);
             }
             MsgKey::Game => {
                 // will block main thread
@@ -62,16 +51,6 @@ fn main() {
             MsgKey::Ok => {}
         }
     }
-}
-
-fn recv(socket: &Socket) -> ProtocolInterface {
-    let msg = socket.recv_string(0).expect("none").unwrap();
-    serde_json::from_str(&msg).unwrap()
-}
-
-fn send(socket: &Socket, msg: ProtocolInterface) {
-    let response_str = serde_json::to_string(&msg).unwrap();
-    socket.send(&response_str, 0).expect("sendind error");
 }
 
 fn _save_config() {
@@ -109,16 +88,4 @@ fn _single_run() {
 
     println!("process: {:?}", st.elapsed());
     println!("TOTOAL: {:?}", total.elapsed());
-}
-
-fn store_cfg() {
-    let conf = config::Config::new(
-        webwrapper::WrapperMode::Chesscom,
-        utils::screen_region::ScreenRegion::new(70, 70, 700, 700),
-        std::collections::HashMap::from_iter([('C', 0.6721)]),
-        false,
-        String::new(),
-    )
-    .unwrap();
-    save_config(&conf, &mut RealFileSystem).unwrap();
 }
