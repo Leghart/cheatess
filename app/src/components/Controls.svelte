@@ -16,10 +16,8 @@
 
 <style>
   .controls {
-    display: flex;
-    flex-direction: column;
-
-        /* grid-template-columns: 3fr 2fr; */
+      display: flex;
+      flex-direction: column;
         color: white;
         gap: 1em;
   }

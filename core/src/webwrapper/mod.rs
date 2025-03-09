@@ -54,7 +54,7 @@ pub trait ChessboardTrackerInterface: Default {
         let thresholds = self.get_thresholds();
         let path_str = self.pieces_path();
 
-        for entry in fs::read_dir(format!("../pieces/{path_str}/")).unwrap() {
+        for entry in fs::read_dir(format!("../.pieces/{path_str}/")).unwrap() {
             if let Ok(entry) = entry {
                 let file_name = entry
                     .path()

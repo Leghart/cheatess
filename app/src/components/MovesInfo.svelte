@@ -1,4 +1,3 @@
-<!-- Components/MovesInfo.svelte -->
 <script lang="ts">
     let bestMove = '♘ d4';
     let topMoves = [

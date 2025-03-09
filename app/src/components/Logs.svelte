@@ -1,5 +1,4 @@
 
-<!-- Components/Logs.svelte -->
 <script lang="ts">
     let logs: string[] = ['Started scanning board'];
     function handleClear() {
@@ -8,7 +7,6 @@
 </script>
 
 
-<h3>Logs</h3>
 <div class="logs">
     <ul>
         {#each logs as log}

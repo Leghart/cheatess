@@ -108,9 +108,9 @@ fn validate_custom_pieces(
     fs: &mut dyn FileSystem,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let pieces_dir = if custom {
-        "pieces/custom".to_string()
+        ".pieces/custom".to_string()
     } else {
-        format!("pieces/{}", wrapper)
+        format!(".pieces/{}", wrapper)
     };
 
     if !fs.exists(&pieces_dir) {
@@ -192,7 +192,7 @@ mod tests {
     #[test]
     fn test_validate_custom_pieces_custom_true_valid() {
         let mut fs = TestFileSystem::new();
-        let base_dir = "pieces/custom";
+        let base_dir = ".pieces/custom";
         add_fake_files(&mut fs, base_dir, CORRECT_THRESHOLD_KEYS);
 
         let result = validate_custom_pieces(true, &WrapperMode::Chesscom, &mut fs);
@@ -213,7 +213,7 @@ mod tests {
     #[test]
     fn test_validate_custom_pieces_custom_true_incorrect_number_of_files() {
         let mut fs = TestFileSystem::new();
-        let base_dir = "pieces/custom";
+        let base_dir = ".pieces/custom";
         let keys = vec!['p', 'r', 'q'];
         add_fake_files(&mut fs, base_dir, &keys);
 
@@ -228,7 +228,7 @@ mod tests {
     #[test]
     fn test_validate_custom_pieces_custom_true_invalid_filename() {
         let mut fs = TestFileSystem::new();
-        let base_dir = "pieces/custom";
+        let base_dir = ".pieces/custom";
         let mut keys = Vec::from(CORRECT_THRESHOLD_KEYS);
         keys[0] = 'X';
         add_fake_files(&mut fs, base_dir, &keys);
@@ -245,7 +245,7 @@ mod tests {
     fn test_validate_custom_pieces_custom_false_valid() {
         let mut fs = TestFileSystem::new();
         let wrapper_str = "chesscom";
-        let base_dir = format!("pieces/{}", wrapper_str);
+        let base_dir = format!(".pieces/{}", wrapper_str);
         add_fake_files(&mut fs, &base_dir, CORRECT_THRESHOLD_KEYS);
 
         let result = validate_custom_pieces(false, &WrapperMode::Chesscom, &mut fs);

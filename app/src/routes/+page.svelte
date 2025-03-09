@@ -1,48 +1,57 @@
 <script lang="ts">
-    import Board from '../components/Board.svelte';
-    import Controls from '../components/Controls.svelte';
-    import Logs from '../components/Logs.svelte';
-    import MovesInfo from '../components/MovesInfo.svelte';
+  import Game from '../views/Game.svelte';
+  import Settings from '../views/Settings.svelte';
+  import Configuration from '../views/Configuration.svelte';
+  import { writable } from 'svelte/store';
+
+  const currentPage = writable('game');
+
+  function setPage(page: string) {
+      currentPage.set(page);
+  }
 </script>
 
-<main class="app-container">
-  <div class="controls-section">
-      <Controls />
-      <Logs />
+<nav class="navbar">
+  <div class="navbar-buttons">
+      <button on:click={() => setPage('game')}>Game</button>
+      <button on:click={() => setPage('settings')}>Settings</button>
+      <button on:click={() => setPage('configuration')}>Configuration</button>
   </div>
-  <div class="board-section">
-      <div class="board-container">
-          <Board />
-          <MovesInfo />
-      </div>
-  </div>
-</main>
+</nav>
+
+{#if $currentPage === 'game'}
+  <Game/>
+{/if}
+
+{#if $currentPage === 'settings'}
+  <Settings />
+{/if}
+
+{#if $currentPage === 'configuration'}
+  <Configuration />
+{/if}
 
 <style>
-  .app-container {
-      display: grid;
-      grid-template-columns: 250px 1fr;
-      height: 100vh;
-      background-color: #1e1e1e;
+  .navbar {
+      background-color: #333;
+      padding: 1rem;
+      display: flex;
+      justify-content: center;
+  }
+  .navbar-buttons {
+      display: flex;
+      gap: 1rem;
+  }
+  .navbar button {
+      background-color: #555;
       color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      cursor: pointer;
   }
-  .controls-section {
-      padding: 1rem;
-      background-color: #2e2e2e;
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
+  .navbar button:hover {
+      background-color: #777;
   }
-  .board-section {
-      padding: 1rem;
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-  }
-  .board-container {
-      display: flex;
-      flex-direction: row;
-      gap: 1rem;
-      height: 100%;
-  }
+
 </style>

@@ -1,7 +1,5 @@
 
-<!-- Components/Board.svelte -->
 <script lang="ts">
-    // Placeholder for chessboard rendering
 </script>
 
 <div class="board">
