@@ -4,6 +4,11 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
+stockfish = "==3.28.0"
+pyautogui = "==0.9.54"
+customtkinter = "==5.2.2"
+screeninfo = "*"
+zmq = "*"
 
 [dev-packages]
 ruff = "*"
