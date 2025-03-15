@@ -1,25 +1,23 @@
-
 <script lang="ts">
-    function handleStart() {
-      console.log("Started scanning");
-    }
-    function handleStop() {
-      console.log("Stopped scanning");
-    }
-
+  function handleStart() {
+    console.log("Started scanning");
+  }
+  function handleStop() {
+    console.log("Stopped scanning");
+  }
 </script>
-  
+
 <div class="controls">
-  <button on:click="{handleStart}" class="btn start">Start</button>
-  <button on:click="{handleStop}" class="btn stop">Stop</button>
+  <button on:click={handleStart} class="btn start">Start</button>
+  <button on:click={handleStop} class="btn stop">Stop</button>
 </div>
 
 <style>
   .controls {
-      display: flex;
-      flex-direction: column;
-        color: white;
-        gap: 1em;
+    display: flex;
+    flex-direction: column;
+    color: white;
+    gap: 1em;
   }
   .btn {
     padding: 0.5rem 1rem;
@@ -36,6 +34,4 @@
   .stop {
     background-color: #dc3545;
   }
-
 </style>
-  

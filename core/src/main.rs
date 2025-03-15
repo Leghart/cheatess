@@ -1,10 +1,9 @@
-// mod config;
-// mod engine;
-// mod image;
-// mod stockfish;
-// mod utils;
-
-// pub mod webwrapper;
+mod config;
+mod engine;
+mod image;
+mod stockfish;
+mod utils;
+pub mod webwrapper;
 
 // use crate::webwrapper::ChessboardTrackerInterface;
 // use config::save_config;
@@ -54,7 +53,7 @@
 // }
 
 // fn _save_config() {
-//     let conf = config::Config::new(
+//     let conf = config::GameConfig::new(
 //         webwrapper::WrapperMode::Chesscom,
 //         utils::screen_region::ScreenRegion::new(70, 70, 700, 700),
 //         std::collections::HashMap::from_iter([('C', 0.6721)]),
@@ -89,8 +88,10 @@
 //     println!("process: {:?}", st.elapsed());
 //     println!("TOTOAL: {:?}", total.elapsed());
 // }
+use actix_cors::Cors;
 use actix_web::{get, post, web, App, Error, HttpRequest, HttpResponse, HttpServer, Responder};
-use actix_ws::{handle, AggregatedMessage, Message, Session};
+use actix_ws::{handle, AggregatedMessage};
+use config::stockfish::StockfishConfig;
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
@@ -102,14 +103,16 @@ struct Command {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-struct Config {
-    setting1: String,
-    setting2: i32,
+struct GameConfig {
+    platform: String,
+    theme: String,
+    thresholds: Vec<f64>,
 }
 
 struct AppState {
     commands: Mutex<Vec<Command>>,
-    config: Mutex<Config>,
+    game_config: Mutex<GameConfig>,
+    stockfish_config: Mutex<StockfishConfig>,
 }
 
 // WebSocket for game communication
@@ -129,9 +132,8 @@ async fn websocket_handler(
             match msg {
                 Ok(AggregatedMessage::Text(text)) => {
                     if let Ok(command) = serde_json::from_str::<Command>(&text) {
-                        println!("Received command: {:?}", command);
                         let json_message = serde_json::to_string(&command).unwrap();
-                        // session.text(ByteString::from(json_message)).await.unwrap();
+                        session.text(json_message).await.unwrap();
                     } else {
                         println!("Invalid command received: {}", text);
                     }
@@ -150,37 +152,68 @@ async fn websocket_handler(
     Ok(res)
 }
 
-// HTTP GET to fetch current configuration
 #[get("/config")]
 async fn get_config(data: web::Data<AppState>) -> impl Responder {
-    let config = data.config.lock().unwrap();
+    let config = data.game_config.lock().unwrap();
     HttpResponse::Ok().json(&*config)
 }
 
-// HTTP POST to update configuration
 #[post("/config")]
-async fn set_config(data: web::Data<AppState>, new_config: web::Json<Config>) -> impl Responder {
-    let mut config = data.config.lock().unwrap();
+async fn set_config(
+    data: web::Data<AppState>,
+    new_config: web::Json<GameConfig>,
+) -> impl Responder {
+    let mut config = data.game_config.lock().unwrap();
+    *config = new_config.into_inner();
+    HttpResponse::Ok().json("Configuration updated")
+}
+
+#[get("/stockfish/config")]
+async fn get_stock_config(data: web::Data<AppState>) -> impl Responder {
+    let config = data.stockfish_config.lock().unwrap();
+    HttpResponse::Ok().json(&*config)
+}
+
+#[post("/stockfish/config")]
+async fn set_stock_config(
+    data: web::Data<AppState>,
+    new_config: web::Json<StockfishConfig>,
+) -> impl Responder {
+    let mut config = data.stockfish_config.lock().unwrap();
     *config = new_config.into_inner();
     HttpResponse::Ok().json("Configuration updated")
 }
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    let stockfish_config =
+        config::stockfish::StockfishConfig::new("abc", None, None, None).unwrap();
+
     let app_data = web::Data::new(AppState {
         commands: Mutex::new(vec![]),
-        config: Mutex::new(Config {
-            setting1: "default".to_string(),
-            setting2: 42,
+        game_config: Mutex::new(GameConfig {
+            theme: "default".to_string(),
+            thresholds: Vec::new(),
+            platform: "".to_string(),
         }),
+        stockfish_config: Mutex::new(stockfish_config),
     });
 
     HttpServer::new(move || {
         App::new()
+            .wrap(
+                Cors::default()
+                    .allowed_origin("http://127.0.0.1:1420")
+                    .allowed_methods(vec!["GET", "POST"])
+                    .allowed_headers(vec!["Content-Type"])
+                    .max_age(3600),
+            )
             .app_data(app_data.clone())
             .route("/ws/game", web::get().to(websocket_handler))
             .service(get_config)
             .service(set_config)
+            .service(get_stock_config)
+            .service(set_stock_config)
     })
     .bind("127.0.0.1:5555")?
     .run()

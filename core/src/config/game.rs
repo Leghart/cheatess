@@ -1,7 +1,7 @@
 // Should be run only one if user will use cache from system, or
 // everytime when change pieces. But should be never call within game.
 
-use super::utils::screen_region::ScreenRegion;
+use crate::utils::screen_region::ScreenRegion;
 use std::collections::HashMap;
 extern crate serde;
 use std::io::Write;
@@ -13,40 +13,37 @@ static CORRECT_THRESHOLD_KEYS: &[char] =
     &['p', 'r', 'q', 'k', 'b', 'n', 'P', 'R', 'Q', 'K', 'B', 'N'];
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
-pub struct Config {
+pub struct GameConfig {
     platform: WrapperMode,
     region: ScreenRegion,
     thresholds: HashMap<char, f64>,
     custom_pieces: bool,
-    stockfish_path: String,
 }
 
-impl Config {
+impl GameConfig {
     // Create config from passed data.
     pub fn new(
         platform: WrapperMode,
         region: ScreenRegion,
         thresholds: HashMap<char, f64>,
         custom_pieces: bool,
-        stockfish_path: String,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         validate_region(&region)?;
         validate_thresholds(&thresholds)?;
         validate_custom_pieces(custom_pieces, &platform, &mut RealFileSystem)?;
 
-        Ok(Config {
+        Ok(GameConfig {
             platform,
             region,
             thresholds,
             custom_pieces,
-            stockfish_path,
         })
     }
 
     // Load already created config from file.
     pub fn from_cache() -> Result<Self, Box<dyn std::error::Error>> {
-        let path = ".config.json";
-        let config: Config =
+        let path = ".game.config.json";
+        let config: GameConfig =
             serde_json::from_str(path).expect("Can not serialize deserialize config object!");
         validate_region(&config.region)?;
         validate_thresholds(&config.thresholds)?;
@@ -56,11 +53,11 @@ impl Config {
 }
 
 pub fn save_config(
-    config: &Config,
+    config: &GameConfig,
     fs: &mut dyn FileSystem,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let file_path = ".config.json";
-    let data = serde_json::to_string(config).expect("Config object could not be serialized!");
+    let file_path = ".game.config.json";
+    let data = serde_json::to_string(config).expect("GameConfig object could not be serialized!");
     let exists = fs.exists(file_path);
     let mut file = fs.open(file_path, exists)?;
     Ok(file.write_all(data.as_bytes())?)
@@ -161,13 +158,12 @@ mod tests {
     }
 
     #[fixture]
-    fn valid_config(valid_thresholds: HashMap<char, f64>) -> Config {
-        Config {
+    fn valid_config(valid_thresholds: HashMap<char, f64>) -> GameConfig {
+        GameConfig {
             platform: WrapperMode::Chesscom,
             thresholds: valid_thresholds,
             region: ScreenRegion::new(1, 1, 100, 200),
             custom_pieces: false,
-            stockfish_path: String::from(".."),
         }
     }
 
@@ -361,9 +357,9 @@ mod tests {
     }
 
     #[rstest]
-    fn test_save_config_file_does_not_exist(valid_config: Config) {
+    fn test_save_config_file_does_not_exist(valid_config: GameConfig) {
         let mut fake_fs = TestFileSystem::new();
-        let file_path = ".config.json";
+        let file_path = ".game.config.json";
 
         assert!(!fake_fs.exists(file_path));
 
@@ -373,14 +369,14 @@ mod tests {
 
         let file = fake_fs.files.get(file_path).unwrap();
         let data = String::from_utf8(file.borrow().data.clone()).unwrap();
-        let config_from_file: Config = serde_json::from_str(&data).unwrap();
+        let config_from_file: GameConfig = serde_json::from_str(&data).unwrap();
         assert_eq!(valid_config, config_from_file);
     }
 
     #[rstest]
-    fn test_save_config_file_exists(valid_config: Config) {
+    fn test_save_config_file_exists(valid_config: GameConfig) {
         let mut fake_fs = TestFileSystem::new();
-        let file_path = ".config.json";
+        let file_path = ".game.config.json";
 
         let preexisting_file = Rc::new(RefCell::new(FakeFile::default()));
         fake_fs
@@ -393,7 +389,7 @@ mod tests {
 
         let file = fake_fs.files.get(file_path).unwrap();
         let data = String::from_utf8(file.borrow().data.clone()).unwrap();
-        let config_from_file: Config = serde_json::from_str(&data).unwrap();
+        let config_from_file: GameConfig = serde_json::from_str(&data).unwrap();
         assert_eq!(valid_config, config_from_file);
     }
 }
