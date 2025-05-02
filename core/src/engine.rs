@@ -3,6 +3,69 @@
 // transform data to stockfish format etc.
 // TODO: every func & test is for white view
 
+static PIECE_TABLE: [&'static str; 128] = {
+    let mut table = [""; 128];
+    table['r' as usize] = "♜";
+    table['n' as usize] = "♞";
+    table['b' as usize] = "♝";
+    table['q' as usize] = "♛";
+    table['k' as usize] = "♚";
+    table['p' as usize] = "♟";
+    table['R' as usize] = "♖";
+    table['N' as usize] = "♘";
+    table['B' as usize] = "♗";
+    table['Q' as usize] = "♕";
+    table['K' as usize] = "♔";
+    table['P' as usize] = "♙";
+    table
+};
+
+fn get_piece(c: char) -> Option<&'static str> {
+    if (c as usize) < 128 {
+        let v = PIECE_TABLE[c as usize];
+        if v.is_empty() {
+            None
+        } else {
+            Some(v)
+        }
+    } else {
+        None
+    }
+}
+
+pub struct Board {
+    pub board: [[char; 8]; 8],
+}
+
+impl Board {
+    pub fn new() -> Self {
+        Board {
+            board: [
+                ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
+                ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+                [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+                [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+                [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+                [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+                ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
+                ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R'],
+            ],
+        }
+    }
+    pub fn print(&self) {
+        println!("+---+---+---+---+---+---+---+---+");
+
+        for row in self.board.iter() {
+            print!("|");
+            for col in row.iter() {
+                print!(" {} |", get_piece(*col).unwrap_or(" "));
+            }
+            println!();
+            println!("+---+---+---+---+---+---+---+---+");
+        }
+    }
+}
+
 // Insert piece to array board, based on top left position.
 // TODO: add validations
 pub fn register_piece(
