@@ -41,8 +41,8 @@ impl ImageProcessing {
             Scalar::all(0.0),
         )?;
 
-        let mat_data = mat.data_bytes_mut()?;
-        mat_data.copy_from_slice(&buffer.as_raw());
+        // let mat_data = mat.data_bytes_mut()?;
+        // mat_data.copy_from_slice(&buffer.as_raw());
 
         let mut mat_bgr = Mat::default();
         imgproc::cvt_color(&mat, &mut mat_bgr, imgproc::COLOR_RGBA2BGR, 0)?;

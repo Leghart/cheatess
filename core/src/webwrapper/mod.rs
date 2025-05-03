@@ -14,7 +14,7 @@ use std::fs;
 pub mod chesscom;
 pub mod lichess;
 use super::engine::register_piece;
-use super::image::ImageProcessing;
+use super::myimage::ImageProcessing;
 
 #[derive(PartialEq, serde::Serialize, serde::Deserialize, Debug)]
 pub enum WrapperMode {
