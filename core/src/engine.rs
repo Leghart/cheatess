@@ -38,7 +38,11 @@ pub struct Board {
 }
 
 impl Board {
-    pub fn new() -> Self {
+    pub fn new(data: [[char; 8]; 8]) -> Self {
+        Board { board: data }
+    }
+
+    pub fn default() -> Self {
         Board {
             board: [
                 ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
@@ -53,9 +57,14 @@ impl Board {
         }
     }
     pub fn print(&self) {
+        let transposed_board: Vec<Vec<_>> = (0..8)
+            .map(|col| (0..8).map(|row| self.board[row][col]).collect())
+            .collect();
+
         println!("+---+---+---+---+---+---+---+---+");
 
-        for row in self.board.iter() {
+        // for row in self.board.iter() {
+        for row in transposed_board.iter() {
             print!("|");
             for col in row.iter() {
                 print!(" {} |", get_piece(*col).unwrap_or(" "));
