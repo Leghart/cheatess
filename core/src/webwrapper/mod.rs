@@ -85,7 +85,7 @@ pub trait ChessboardTrackerInterface: Default {
     ) -> Result<[[char; 8]; 8], Box<dyn std::error::Error>> {
         let mut result: [[char; 8]; 8] = [[' '; 8]; 8];
         let board_gray = ImageProcessing::threshold(&board_image)?;
-
+        // ImageProcessing::show(&board_gray, false)?;
         for piece_name in pieces.keys() {
             let piece_threshold = pieces.get(piece_name).unwrap().1;
             let mut piece_image = pieces.get(piece_name).unwrap().clone().0;

@@ -33,7 +33,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 fn main() {
-    let (tx, rx): (Sender<Mat>, Receiver<Mat>) = bounded(2);
+    let (tx, rx): (Sender<Mat>, Receiver<Mat>) = bounded(10);
     let prev_hash = Arc::new(Mutex::new(0u64));
 
     let prev_hash_clone = Arc::clone(&prev_hash);
@@ -49,7 +49,7 @@ fn main() {
                 )
                 .unwrap();
 
-                let cropped = imageops::crop_imm(&raw, 100, 100, 360, 360).to_image();
+                let cropped = imageops::crop_imm(&raw, 443, 183, 747, 745).to_image();
                 let dynimage = DynamicImage::ImageRgba8(cropped);
 
                 let hash = image_hash(&dynimage);
@@ -57,16 +57,30 @@ fn main() {
                 if *last_hash != hash {
                     *last_hash = hash;
                     if let Ok(mat) = dynamic_image_to_mat(&dynimage) {
-                        tx.send(mat).ok();
+                        let resized = myimage::ImageProcessing::resize(&mat, 360, 360).unwrap();
+                        // println!("send");
+                        tx.send(resized).ok();
                     }
                 }
-                print!("{:?}", st.elapsed());
+                // print!("{:?}", st.elapsed());
             }
         }
     });
 
+    let tracker = ChesscomWrapper::default();
+
+    let pieces = tracker.load_pieces().unwrap();
+
     while let Ok(mat) = rx.recv() {
-        myimage::ImageProcessing::show(&mat, false).unwrap();
+        // println!("recv");
+        let st = Instant::now();
+        let board_data = tracker.process_image(&mat, &pieces).unwrap();
+        // println!("process: {:?}", st.elapsed());
+
+        let board = engine::Board::new(board_data);
+        board.print();
+        println!("{:?}", st.elapsed());
+        // myimage::ImageProcessing::show(&mat, false).unwrap();
         // break;
 
         // if let Ok(board_data) = process_image(&mat) {
