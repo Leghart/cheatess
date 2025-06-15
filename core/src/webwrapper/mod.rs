@@ -89,11 +89,6 @@ pub trait ChessboardTrackerInterface: Default {
         for piece_name in pieces.keys() {
             let piece_threshold = pieces.get(piece_name).unwrap().1;
             let mut piece_image = pieces.get(piece_name).unwrap().clone().0;
-
-            if self.mode() == WrapperMode::Chesscom && *piece_name == "p".to_string() {
-                piece_image = ImageProcessing::resize(&piece_image, 43, 43).unwrap();
-            }
-
             let piece_gray = ImageProcessing::threshold(&piece_image)?;
 
             let mask = ImageProcessing::get_mask(&piece_image)?;

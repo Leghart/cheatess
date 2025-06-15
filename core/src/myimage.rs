@@ -96,8 +96,17 @@ impl ImageProcessing {
     pub fn get_mask(image: &Mat) -> Result<Mat, Box<dyn std::error::Error>> {
         let mut channels: Vector<Mat> = Vector::new();
         split(image, &mut channels)?;
-        let mask = channels.get(3)?;
+        let alpha = channels.get(3)?;
 
-        Ok(mask)
+        let mut binary_mask = Mat::default();
+        opencv::imgproc::threshold(
+            &alpha,
+            &mut binary_mask,
+            1.0,
+            255.0,
+            opencv::imgproc::THRESH_BINARY,
+        )?;
+
+        Ok(binary_mask)
     }
 }
