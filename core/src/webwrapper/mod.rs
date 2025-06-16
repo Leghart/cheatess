@@ -84,22 +84,54 @@ pub trait ChessboardTrackerInterface: Default {
         pieces: &HashMap<String, (Mat, f64)>,
     ) -> Result<[[char; 8]; 8], Box<dyn std::error::Error>> {
         let mut result: [[char; 8]; 8] = [[' '; 8]; 8];
-        let board_gray = ImageProcessing::threshold(&board_image)?;
-        // ImageProcessing::show(&board_gray, false)?;
+        // let board_gray = ImageProcessing::threshold(&board_image)?;
+        // let mut board_bgr = Mat::default();
+        // imgproc::cvt_color(&board_image, &mut board_bgr, imgproc::COLOR_BGRA2BGR, 0)?;
+
+        // let mut thresholded_board = Mat::default();
+        // imgproc::cvt_color(
+        //     &board_bgr,
+        //     &mut thresholded_board,
+        //     imgproc::COLOR_BGR2GRAY,
+        //     0,
+        // )?;
+
         for piece_name in pieces.keys() {
             let piece_threshold = pieces.get(piece_name).unwrap().1;
-            let mut piece_image = pieces.get(piece_name).unwrap().clone().0;
-            let piece_gray = ImageProcessing::threshold(&piece_image)?;
+            let piece_image = pieces.get(piece_name).unwrap().clone().0;
+            // let piece_gray = ImageProcessing::threshold(&piece_image)?;
+            // let mut piece_bgr = Mat::default();
+            // imgproc::cvt_color(&piece_image, &mut piece_bgr, imgproc::COLOR_BGRA2BGR, 0)?;
+
+            // let mut thresholded_piece = Mat::default();
+            // imgproc::cvt_color(
+            //     &piece_bgr,
+            //     &mut thresholded_piece,
+            //     imgproc::COLOR_BGR2GRAY,
+            //     0,
+            // )?;
+
+            // ImageProcessing::show(&thresholded_board, false)?;
+            // ImageProcessing::show(&thresholded_piece, false)?;
+            // println!(
+            //     "{} {}",
+            //     thresholded_board.channels(),
+            //     thresholded_piece.channels()
+            // );
+            // // panic!();
 
             let mask = ImageProcessing::get_mask(&piece_image)?;
-            let mut matched = ImageProcessing::match_template(&board_gray, &piece_gray, &mask)?;
+            let mut matched = ImageProcessing::match_template(&board_image, &piece_image, &mask)?;
+
+            ImageProcessing::show(&board_image, false)?;
+            ImageProcessing::show(&piece_image, false)?;
 
             let mut min_val = 0.0;
             let mut max_val = 0.0;
             let mut min_loc = Point::default();
             let mut max_loc = Point::default();
 
-            let board_size = board_gray.size().unwrap();
+            let board_size = board_image.size().unwrap();
 
             min_max_loc(
                 &matched,

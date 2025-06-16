@@ -110,21 +110,7 @@ fn get_board_region(raw: &Mat) -> (u32, u32, u32, u32) {
 }
 
 fn main() {
-    let monitor = select_primary_monitor(false);
-
-    let monitor = monitor.expect("No primary monitor found");
-    let raw = capture_entire_screen(&monitor);
-    let dyn_image = DynamicImage::ImageRgba8(raw.clone());
-
-    let rat = dynamic_image_to_mat(&dyn_image).unwrap();
-    let coords = get_board_region(&rat);
-
-    let cropped = imageops::crop_imm(&raw, coords.0, coords.1, coords.2, coords.3).to_image();
-    let dynimage = DynamicImage::ImageRgba8(cropped);
-    let board = dynamic_image_to_mat(&dynimage).unwrap();
-    // myimage::ImageProcessing::show(&board, true).unwrap();
-    extract_pieces(&board).unwrap();
-
+    let start = Instant::now();
     let piece1 =
         opencv::imgcodecs::imread("pieces/k.png", opencv::imgcodecs::IMREAD_UNCHANGED).unwrap();
     let piece2 =
@@ -151,35 +137,54 @@ fn main() {
     let piece66 =
         opencv::imgcodecs::imread("pieces/N.png", opencv::imgcodecs::IMREAD_UNCHANGED).unwrap();
 
+    // myimage::ImageProcessing::show(&piece1, true).unwrap();
+    // panic!();
+    // return ();
+
+    println!("Loaded pieces in: {:?}", start.elapsed());
+    let monitor = select_primary_monitor(false);
+    println!("Monitor selection took: {:?}", start.elapsed());
+    let monitor = monitor.expect("No primary monitor found");
+
+    let raw = capture_entire_screen(&monitor);
+    let dyn_image = DynamicImage::ImageRgba8(raw.clone());
+    println!("Captured screen in: {:?}", start.elapsed());
+    let rat = dynamic_image_to_mat(&dyn_image).unwrap();
+    let coords = get_board_region(&rat);
+
+    let cropped = imageops::crop_imm(&raw, coords.0, coords.1, coords.2, coords.3).to_image();
+    let dynimage = DynamicImage::ImageRgba8(cropped);
+    let board = dynamic_image_to_mat(&dynimage).unwrap();
+    println!("Cropped board in: {:?}", start.elapsed());
+    extract_pieces(&board).unwrap();
+
     let tracker = ChesscomWrapper::default();
     let r = tracker
         .process_image(
             &board,
             &std::collections::HashMap::from_iter([
-                ('k'.to_string(), (piece1, 0.1)),
-                ('q'.to_string(), (piece2, 0.1)),
-                ('b'.to_string(), (piece3, 0.1)),
-                ('p'.to_string(), (piece4, 0.4)),
-                ('r'.to_string(), (piece5, 0.2)),
-                ('n'.to_string(), (piece6, 0.1)),
-                ('K'.to_string(), (piece11, 0.1)),
-                ('Q'.to_string(), (piece22, 0.1)),
-                ('B'.to_string(), (piece33, 0.1)),
-                ('P'.to_string(), (piece44, 0.2)),
-                ('R'.to_string(), (piece55, 0.2)),
-                ('N'.to_string(), (piece66, 0.1)),
+                ('k'.to_string(), (piece1.clone(), 0.1)),
+                ('q'.to_string(), (piece2.clone(), 0.1)),
+                ('b'.to_string(), (piece3.clone(), 0.1)),
+                ('p'.to_string(), (piece4.clone(), 0.1)),
+                ('r'.to_string(), (piece5.clone(), 0.1)),
+                ('n'.to_string(), (piece6.clone(), 0.1)),
+                ('K'.to_string(), (piece11.clone(), 0.1)),
+                ('Q'.to_string(), (piece22.clone(), 0.1)),
+                ('B'.to_string(), (piece33.clone(), 0.1)),
+                ('P'.to_string(), (piece44.clone(), 0.1)),
+                ('R'.to_string(), (piece55.clone(), 0.1)),
+                ('N'.to_string(), (piece66.clone(), 0.1)),
             ]),
         )
         .unwrap();
+    println!("Processed image in: {:?}", start.elapsed());
     let board = engine::Board::new(r);
     board.print();
 }
 
 fn extract_pieces(img: &Mat) -> Result<()> {
-    // let board_size = img.rows().min(img.cols());
-    // let square_size = board_size as f32 / 8.0;
-
-    let board_size = img.rows().min(img.cols()); // załóżmy kwadratowa
+    let board_size = img.rows().min(img.cols());
     let board_size_f = board_size as f32;
 
     let mut x_edges = vec![];
@@ -206,18 +211,6 @@ fn extract_pieces(img: &Mat) -> Result<()> {
     ];
 
     for ((col, row), name) in named_fields {
-        // let y_start = (row as f32 * square_size).round() as i32;
-        // let y_end = ((row + 1) as f32 * square_size).round() as i32;
-        // let x_start = (col as f32 * square_size).round() as i32;
-        // let x_end = ((col + 1) as f32 * square_size).round() as i32;
-
-        // let roi = Rect::new(
-        //     x_start,
-        //     y_start,
-        //     (x_end - x_start).max(1),
-        //     (y_end - y_start).max(1),
-        // );
-
         let x = x_edges[col];
         let y = y_edges[row];
         let w = x_edges[col + 1] - x;
@@ -226,6 +219,9 @@ fn extract_pieces(img: &Mat) -> Result<()> {
         let roi = Rect::new(x, y, w, h);
 
         let img = Mat::roi(img, roi)?;
+
+        // let mut thresholded = Mat::default();
+        // imgproc::cvt_color(&img, &mut thresholded, imgproc::COLOR_BGR2GRAY, 0)?;
 
         let mut img_bgra = Mat::default();
         opencv::imgproc::cvt_color(&img, &mut img_bgra, opencv::imgproc::COLOR_BGR2BGRA, 0)?;
@@ -270,18 +266,6 @@ fn extract_pieces(img: &Mat) -> Result<()> {
                 }
             }
         }
-
-        // TEST:
-        // let mut blurred = Mat::default();
-        // imgproc::gaussian_blur(
-        //     &img_bgra,
-        //     &mut blurred,
-        //     opencv::core::Size::new(3, 3),
-        //     0.0,
-        //     0.0,
-        //     opencv::core::BORDER_DEFAULT,
-        // )?;
-
         opencv::imgcodecs::imwrite(
             &format!("pieces/{name}.png"),
             &img_bgra,
