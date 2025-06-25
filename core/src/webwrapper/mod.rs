@@ -84,54 +84,106 @@ pub trait ChessboardTrackerInterface: Default {
         pieces: &HashMap<String, (Mat, f64)>,
     ) -> Result<[[char; 8]; 8], Box<dyn std::error::Error>> {
         let mut result: [[char; 8]; 8] = [[' '; 8]; 8];
-        // let board_gray = ImageProcessing::threshold(&board_image)?;
-        // let mut board_bgr = Mat::default();
-        // imgproc::cvt_color(&board_image, &mut board_bgr, imgproc::COLOR_BGRA2BGR, 0)?;
 
-        // let mut thresholded_board = Mat::default();
-        // imgproc::cvt_color(
-        //     &board_bgr,
-        //     &mut thresholded_board,
-        //     imgproc::COLOR_BGR2GRAY,
-        //     0,
-        // )?;
+        let mut gray_board = Mat::default();
+        imgproc::cvt_color(&board_image, &mut gray_board, imgproc::COLOR_BGR2GRAY, 0)?;
+        let mut bin_board = Mat::default();
+        imgproc::threshold(
+            &gray_board,
+            &mut bin_board,
+            127.0,
+            255.0,
+            imgproc::THRESH_BINARY,
+        )?;
 
-        for piece_name in pieces.keys() {
-            let piece_threshold = pieces.get(piece_name).unwrap().1;
-            let piece_image = pieces.get(piece_name).unwrap().clone().0;
-            // let piece_gray = ImageProcessing::threshold(&piece_image)?;
-            // let mut piece_bgr = Mat::default();
-            // imgproc::cvt_color(&piece_image, &mut piece_bgr, imgproc::COLOR_BGRA2BGR, 0)?;
+        let piece_name = 'p';
+        let piece_threshold = pieces.get(&piece_name.to_string()).unwrap().1;
+        let piece_image = pieces.get(&piece_name.to_string()).unwrap().clone().0;
 
-            // let mut thresholded_piece = Mat::default();
-            // imgproc::cvt_color(
-            //     &piece_bgr,
-            //     &mut thresholded_piece,
-            //     imgproc::COLOR_BGR2GRAY,
+        // ImageProcessing::show(&bin_board, false)?;
+        // ImageProcessing::show(&piece_image, false)?;
+
+        let mut matched = Mat::default();
+        imgproc::match_template(
+            &bin_board,
+            &piece_image,
+            &mut matched,
+            imgproc::TM_SQDIFF_NORMED, // for SQDIFF  min_loc give better mactch
+            &Mat::default(),
+        )?;
+
+        // ImageProcessing::show(&matched, false)?;
+        let mut min_val = 0.0;
+        let mut max_val = 0.0;
+        let mut min_loc = Point::default();
+        let mut max_loc = Point::default();
+
+        let board_size = board_image.size().unwrap();
+
+        min_max_loc(
+            &matched,
+            Some(&mut min_val),
+            Some(&mut max_val),
+            Some(&mut min_loc),
+            Some(&mut max_loc),
+            &Mat::default(),
+        )?;
+
+        while min_val < piece_threshold {
+            let top_left = min_loc;
+
+            register_piece(
+                (top_left.x, top_left.y),
+                (board_size.width, board_size.height),
+                &piece_name,
+                &mut result,
+            )?;
+
+            // TODO: change hardcoded values
+            let size = matched.size()?;
+            let top_x = top_left.x.max(0).min(size.width - 1);
+            let top_y = top_left.y.max(0).min(size.height - 1);
+
+            let rect_x = (top_x as i32 - 22).max(0);
+            let rect_y = (top_y as i32 - 22).max(0);
+
+            let rect_w = (45).min(size.width - rect_x);
+            let rect_h = (45).min(size.height - rect_y);
+
+            let poison = Rect::new(rect_x, rect_y, rect_w, rect_h);
+            // let mut aaa = board_image.clone();
+            // imgproc::rectangle(
+            //     &mut aaa,
+            //     poison,
+            //     Scalar::new(0.0, 255.0, 0.0, 0.0),
+            //     2,
+            //     imgproc::LINE_8,
             //     0,
             // )?;
+            // imgproc::circle(
+            //     &mut aaa,
+            //     Point::new(top_x, top_y),
+            //     1,
+            //     Scalar::new(0.0, 0.0, 255.0, 0.0),
+            //     -1,
+            //     imgproc::LINE_8,
+            //     0,
+            // )?;
+            // imgproc::circle(
+            //     &mut aaa,
+            //     top_left,
+            //     1,
+            //     Scalar::new(0.0, 255.0, 255.0, 0.0),
+            //     -1,
+            //     imgproc::LINE_8,
+            //     0,
+            // )?;
+            // ImageProcessing::show(&aaa, false)?;
 
-            // ImageProcessing::show(&thresholded_board, false)?;
-            // ImageProcessing::show(&thresholded_piece, false)?;
-            // println!(
-            //     "{} {}",
-            //     thresholded_board.channels(),
-            //     thresholded_piece.channels()
-            // );
-            // // panic!();
-
-            let mask = ImageProcessing::get_mask(&piece_image)?;
-            let mut matched = ImageProcessing::match_template(&board_image, &piece_image, &mask)?;
-
-            ImageProcessing::show(&board_image, false)?;
-            ImageProcessing::show(&piece_image, false)?;
-
-            let mut min_val = 0.0;
-            let mut max_val = 0.0;
-            let mut min_loc = Point::default();
-            let mut max_loc = Point::default();
-
-            let board_size = board_image.size().unwrap();
+            let mut result_slice = matched.roi_mut(poison)?;
+            result_slice
+                .set_to(&Scalar::all(1.0), &Mat::default())
+                .unwrap();
 
             min_max_loc(
                 &matched,
@@ -140,45 +192,8 @@ pub trait ChessboardTrackerInterface: Default {
                 Some(&mut min_loc),
                 Some(&mut max_loc),
                 &Mat::default(),
-            )?;
-
-            while min_val < piece_threshold {
-                let top_left = min_loc;
-
-                register_piece(
-                    (top_left.x, top_left.y),
-                    (board_size.width, board_size.height),
-                    &piece_name.chars().next().unwrap(),
-                    &mut result,
-                )?;
-
-                let size = matched.size()?;
-                let top_x = top_left.x.max(0).min(size.width - 1);
-                let top_y = top_left.y.max(0).min(size.height - 1);
-
-                let rect_x = (top_x as i32 - 22).max(0);
-                let rect_y = (top_y as i32 - 22).max(0);
-
-                let rect_w = (45).min(size.width - rect_x);
-                let rect_h = (45).min(size.height - rect_y);
-
-                let poison = Rect::new(rect_x, rect_y, rect_w, rect_h);
-
-                let mut result_slice = matched.roi_mut(poison)?;
-                result_slice
-                    .set_to(&Scalar::all(1.0), &Mat::default())
-                    .unwrap();
-
-                min_max_loc(
-                    &matched,
-                    Some(&mut min_val),
-                    Some(&mut max_val),
-                    Some(&mut min_loc),
-                    Some(&mut max_loc),
-                    &Mat::default(),
-                )
-                .unwrap();
-            }
+            )
+            .unwrap();
         }
 
         Ok(result)
@@ -282,4 +297,39 @@ pub trait ChessboardTrackerInterface: Default {
 
         Ok(())
     }
+}
+
+fn create_mask_from_white_piece(piece_gray: &Mat) -> Result<Mat, Box<dyn std::error::Error>> {
+    let mut mask = Mat::default();
+    imgproc::threshold(
+        piece_gray,
+        &mut mask,
+        0.0,
+        255.0,
+        imgproc::THRESH_BINARY_INV | imgproc::THRESH_OTSU,
+    )?;
+    Ok(mask)
+}
+
+fn create_mask_from_black_piece(piece_gray: &Mat) -> Result<Mat, Box<dyn std::error::Error>> {
+    let mut inverted = Mat::default();
+    opencv::core::bitwise_not(piece_gray, &mut inverted, &opencv::core::no_array())?;
+
+    let mut mask = Mat::default();
+    imgproc::threshold(
+        &inverted,
+        &mut mask,
+        0.0,
+        255.0,
+        imgproc::THRESH_BINARY | imgproc::THRESH_OTSU,
+    )?;
+    Ok(mask)
+}
+
+fn preprocess_piece(piece_gray: &Mat) -> Result<(Mat, Mat), Box<dyn std::error::Error>> {
+    let gray = piece_gray.clone();
+    let mut mask = Mat::default();
+    imgproc::threshold(&gray, &mut mask, 250.0, 255.0, imgproc::THRESH_BINARY_INV)?;
+
+    Ok((gray, mask))
 }

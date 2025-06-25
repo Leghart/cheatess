@@ -137,28 +137,29 @@ fn main() {
     let piece66 =
         opencv::imgcodecs::imread("pieces/N.png", opencv::imgcodecs::IMREAD_UNCHANGED).unwrap();
 
-    // myimage::ImageProcessing::show(&piece1, true).unwrap();
-    // panic!();
-    // return ();
+    // println!("Loaded pieces in: {:?}", start.elapsed());
+    // let monitor = select_primary_monitor(false);
+    // println!("Monitor selection took: {:?}", start.elapsed());
+    // let monitor = monitor.expect("No primary monitor found");
 
-    println!("Loaded pieces in: {:?}", start.elapsed());
-    let monitor = select_primary_monitor(false);
-    println!("Monitor selection took: {:?}", start.elapsed());
-    let monitor = monitor.expect("No primary monitor found");
+    // let raw = capture_entire_screen(&monitor);
+    // let dyn_image = DynamicImage::ImageRgba8(raw.clone());
+    // println!("Captured screen in: {:?}", start.elapsed());
+    // let rat = dynamic_image_to_mat(&dyn_image).unwrap();
+    // let coords = get_board_region(&rat);
 
-    let raw = capture_entire_screen(&monitor);
-    let dyn_image = DynamicImage::ImageRgba8(raw.clone());
-    println!("Captured screen in: {:?}", start.elapsed());
-    let rat = dynamic_image_to_mat(&dyn_image).unwrap();
-    let coords = get_board_region(&rat);
+    // let cropped = imageops::crop_imm(&raw, coords.0, coords.1, coords.2, coords.3).to_image();
+    // let dynimage = DynamicImage::ImageRgba8(cropped);
+    // let board = dynamic_image_to_mat(&dynimage).unwrap();
+    let board =
+        opencv::imgcodecs::imread("board.png", opencv::imgcodecs::IMREAD_UNCHANGED).unwrap();
 
-    let cropped = imageops::crop_imm(&raw, coords.0, coords.1, coords.2, coords.3).to_image();
-    let dynimage = DynamicImage::ImageRgba8(cropped);
-    let board = dynamic_image_to_mat(&dynimage).unwrap();
-    println!("Cropped board in: {:?}", start.elapsed());
+    // println!("Cropped board in: {:?}", start.elapsed());
     extract_pieces(&board).unwrap();
 
     let tracker = ChesscomWrapper::default();
+    let start = Instant::now();
+
     let r = tracker
         .process_image(
             &board,
@@ -216,59 +217,31 @@ fn extract_pieces(img: &Mat) -> Result<()> {
         let w = x_edges[col + 1] - x;
         let h = y_edges[row + 1] - y;
 
+        // TODO!
+        let margin = 5;
+        let x = x + margin;
+        let y = y + margin;
+        let w = (w - 2 * margin).max(1);
+        let h = (h - 2 * margin).max(1);
+
         let roi = Rect::new(x, y, w, h);
 
         let img = Mat::roi(img, roi)?;
 
-        // let mut thresholded = Mat::default();
-        // imgproc::cvt_color(&img, &mut thresholded, imgproc::COLOR_BGR2GRAY, 0)?;
+        let mut thresholded = Mat::default();
+        imgproc::cvt_color(&img, &mut thresholded, imgproc::COLOR_BGR2GRAY, 0)?;
+        let mut bin_board = Mat::default();
+        imgproc::threshold(
+            &thresholded,
+            &mut bin_board,
+            127.0,
+            255.0,
+            imgproc::THRESH_BINARY,
+        )?;
 
-        let mut img_bgra = Mat::default();
-        opencv::imgproc::cvt_color(&img, &mut img_bgra, opencv::imgproc::COLOR_BGR2BGRA, 0)?;
-
-        let mut img_bgr = Mat::default();
-        opencv::imgproc::cvt_color(&img_bgra, &mut img_bgr, opencv::imgproc::COLOR_BGRA2BGR, 0)?;
-
-        let offset = 6;
-
-        let probe_y = if row % 2 == 0 { offset } else { h - 1 - offset };
-
-        let probe_x = if col % 2 == 0 { offset } else { w - 1 - offset };
-        let px = img_bgr.at_2d::<opencv::core::Vec3b>(probe_y, probe_x)?;
-
-        let base_b = px[0] as f64;
-        let base_g = px[1] as f64;
-        let base_r = px[2] as f64;
-        let tol = 10.0;
-
-        let lower = Scalar::new(
-            (base_b - tol).max(0.0),
-            (base_g - tol).max(0.0),
-            (base_r - tol).max(0.0),
-            0.0,
-        );
-        let upper = Scalar::new(
-            (base_b + tol).min(255.0),
-            (base_g + tol).min(255.0),
-            (base_r + tol).min(255.0),
-            0.0,
-        );
-
-        let mut mask = Mat::default();
-        opencv::core::in_range(&img_bgr, &lower, &upper, &mut mask)?;
-
-        // set aplha=0 to disable the background
-        for y in 0..img_bgra.rows() {
-            for x in 0..img_bgra.cols() {
-                if *mask.at_2d::<u8>(y, x)? > 0 {
-                    let pixel = img_bgra.at_2d_mut::<opencv::core::Vec4b>(y, x)?;
-                    pixel[3] = 0;
-                }
-            }
-        }
         opencv::imgcodecs::imwrite(
             &format!("pieces/{name}.png"),
-            &img_bgra,
+            &bin_board,
             &opencv::core::Vector::<i32>::new(),
         )?;
     }
