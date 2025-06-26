@@ -3,21 +3,93 @@
 // transform data to stockfish format etc.
 // TODO: every func & test is for white view
 
+static PIECE_TABLE: [&'static str; 128] = {
+    let mut table = [""; 128];
+    table['r' as usize] = "♜";
+    table['n' as usize] = "♞";
+    table['b' as usize] = "♝";
+    table['q' as usize] = "♛";
+    table['k' as usize] = "♚";
+    table['p' as usize] = "♟";
+    table['R' as usize] = "♖";
+    table['N' as usize] = "♘";
+    table['B' as usize] = "♗";
+    table['Q' as usize] = "♕";
+    table['K' as usize] = "♔";
+    table['P' as usize] = "♙";
+    table
+};
+
+fn get_piece(c: char) -> Option<&'static str> {
+    if (c as usize) < 128 {
+        let v = PIECE_TABLE[c as usize];
+        if v.is_empty() {
+            None
+        } else {
+            Some(v)
+        }
+    } else {
+        None
+    }
+}
+
+pub struct Board {
+    pub board: [[char; 8]; 8],
+}
+
+impl Board {
+    pub fn new(data: [[char; 8]; 8]) -> Self {
+        Board { board: data }
+    }
+
+    pub fn default() -> Self {
+        Board {
+            board: [
+                ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
+                ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+                [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+                [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+                [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+                [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+                ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
+                ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R'],
+            ],
+        }
+    }
+    pub fn print(&self) {
+        let transposed_board: Vec<Vec<_>> = (0..8)
+            .map(|col| (0..8).map(|row| self.board[row][col]).collect())
+            .collect();
+
+        println!("+---+---+---+---+---+---+---+---+");
+
+        // for row in self.board.iter() {
+        for row in transposed_board.iter() {
+            print!("|");
+            for col in row.iter() {
+                print!(" {} |", get_piece(*col).unwrap_or(" "));
+            }
+            println!();
+            println!("+---+---+---+---+---+---+---+---+");
+        }
+    }
+}
+
 // Insert piece to array board, based on top left position.
 // TODO: add validations
 pub fn register_piece(
     point: (i32, i32),
     board_size: (i32, i32),
-    piece: &char,
+    piece: char,
     board: &mut [[char; 8]; 8],
 ) -> Result<(), Box<dyn std::error::Error>> {
     let tile_width = board_size.0 / 8;
     let tile_height = board_size.1 / 8;
 
-    let row = (point.0 / tile_height).clamp(0, 7);
-    let col = (point.1 / tile_width).clamp(0, 7);
+    let row = (point.0 / tile_height).clamp(0, 7) as usize;
+    let col = (point.1 / tile_width).clamp(0, 7) as usize;
 
-    board[row as usize][col as usize] = *piece;
+    board[row][col] = piece;
     Ok(())
 }
 
@@ -98,7 +170,7 @@ mod tests {
         #[case] result_row_col: (usize, usize),
         mut empty_board: [[char; 8]; 8],
     ) {
-        assert!(register_piece(point, board_size, &'X', &mut empty_board).is_ok());
+        assert!(register_piece(point, board_size, 'X', &mut empty_board).is_ok());
         assert_eq!(empty_board[result_row_col.0][result_row_col.1], 'X');
     }
 
