@@ -1,221 +1,278 @@
 mod config;
 mod engine;
-mod image;
+mod img_proc;
 mod stockfish;
 mod utils;
-pub mod webwrapper;
 
-// use crate::webwrapper::ChessboardTrackerInterface;
-// use config::save_config;
-// use image::ImageProcessing;
+use std::time::Instant;
 
-// use utils::{
-//     context::{Context, MsgKey, ProtocolInterface},
-//     file_system::RealFileSystem,
-//     screen_region::ScreenRegion,
-// };
-// use webwrapper::chesscom::ChesscomWrapper;
+use opencv::{
+    core::{Mat, Point, Rect, Scalar, CV_8UC4},
+    imgproc,
+    prelude::*,
+};
+use std::sync::{Arc, Mutex};
+use std::thread;
 
-// fn main() {
-//     let mut ctx = Context::new();
-//     ctx.connect();
+use image::{imageops, DynamicImage};
+use xcap::Monitor;
 
-//     let mut region = ScreenRegion::new(0, 0, 0, 0);
+use image::{ImageBuffer, Rgba};
 
-//     loop {
-//         let msg = ctx.recv();
+use opencv::Result;
 
-//         match msg.key {
-//             MsgKey::Region => {
-//                 match ScreenRegion::try_from(msg.message) {
-//                     Ok(_region) => region = _region,
-//                     Err(err) => eprintln!("{err}"),
-//                 };
-//                 ctx.send(ProtocolInterface {
-//                     key: MsgKey::Ok,
-//                     message: String::new(),
-//                 });
-//             }
-//             MsgKey::Configurate => {}
-//             MsgKey::Ping => {
-//                 let response = ProtocolInterface {
-//                     key: MsgKey::Ok,
-//                     message: format!("{:?}", region),
-//                 };
-//                 ctx.send(response);
-//             }
-//             MsgKey::Game => {
-//                 // will block main thread
-//             }
-//             MsgKey::Ok => {}
-//         }
-//     }
-// }
-
-// fn _save_config() {
-//     let conf = config::GameConfig::new(
-//         webwrapper::WrapperMode::Chesscom,
-//         utils::screen_region::ScreenRegion::new(70, 70, 700, 700),
-//         std::collections::HashMap::from_iter([('C', 0.6721)]),
-//         false,
-//         String::new(),
-//     )
-//     .unwrap();
-//     save_config(&conf, &mut RealFileSystem).unwrap();
-// }
-
-// fn _single_run() {
-//     let total = std::time::Instant::now();
-//     let st = std::time::Instant::now();
-//     let tracker = ChesscomWrapper::default();
-//     println!("tracker: {:?}", st.elapsed());
-
-//     let st = std::time::Instant::now();
-//     let image = tracker.capture_screenshot().unwrap();
-//     println!("screenshot: {:?}", st.elapsed());
-
-//     let st = std::time::Instant::now();
-//     let resized = ImageProcessing::resize(&image, 360, 360).unwrap();
-//     println!("resize: {:?}", st.elapsed());
-
-//     let st = std::time::Instant::now();
-//     let pieces = tracker.load_pieces().unwrap();
-//     println!("laod pieces: {:?}", st.elapsed());
-
-//     let st = std::time::Instant::now();
-//     let _ = tracker.process_image(&resized, pieces).unwrap();
-
-//     println!("process: {:?}", st.elapsed());
-//     println!("TOTOAL: {:?}", total.elapsed());
-// }
-use actix_cors::Cors;
-use actix_web::{get, post, web, App, Error, HttpRequest, HttpResponse, HttpServer, Responder};
-use actix_ws::{handle, AggregatedMessage};
-use config::stockfish::StockfishConfig;
-use futures_util::StreamExt;
-use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-struct Command {
-    action: String,
-    parameters: Vec<String>,
+fn select_primary_monitor(primary: bool) -> Option<Monitor> {
+    for m in Monitor::all().unwrap() {
+        if primary && m.is_primary().unwrap() {
+            return Some(m);
+        } else if !primary && !m.is_primary().unwrap() {
+            return Some(m);
+        }
+    }
+    None
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-struct GameConfig {
-    platform: String,
-    theme: String,
-    thresholds: Vec<f64>,
+fn capture_entire_screen(monitor: &Monitor) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
+    let capture = monitor.capture_image().unwrap();
+
+    ImageBuffer::<Rgba<u8>, _>::from_raw(capture.width(), capture.height(), capture.into_vec())
+        .unwrap()
 }
 
-struct AppState {
-    commands: Mutex<Vec<Command>>,
-    game_config: Mutex<GameConfig>,
-    stockfish_config: Mutex<StockfishConfig>,
-}
+// This function captures the screen and returns the region of the chessboard
+// with the following steps:
+// - Convert the captured image to grayscale
+// - Apply Canny edge detection to find the edges
+// - Find contours in the edge-detected image
+// - Approximate the contours to find quadrilaterals
+fn get_board_region(raw: &Mat) -> (u32, u32, u32, u32) {
+    let mut gray = Mat::default();
+    imgproc::cvt_color(&raw, &mut gray, imgproc::COLOR_BGR2GRAY, 0).unwrap();
 
-// WebSocket for game communication
-async fn websocket_handler(
-    req: HttpRequest,
-    stream: web::Payload,
-    data: web::Data<AppState>,
-) -> Result<HttpResponse, Error> {
-    let (res, mut session, stream) = handle(&req, stream)?;
+    // contours without blurring to keep sharp edges
+    let mut edges = Mat::default();
+    imgproc::canny(&gray, &mut edges, 50.0, 150.0, 3, false).unwrap();
 
-    let mut stream = stream
-        .aggregate_continuations()
-        .max_continuation_size(2_usize.pow(20));
+    let mut contours = opencv::core::Vector::<opencv::core::Vector<Point>>::new();
+    imgproc::find_contours(
+        &edges,
+        &mut contours,
+        imgproc::RETR_EXTERNAL,
+        imgproc::CHAIN_APPROX_SIMPLE,
+        Point::new(0, 0),
+    )
+    .unwrap();
 
-    actix_web::rt::spawn(async move {
-        while let Some(msg) = stream.next().await {
-            match msg {
-                Ok(AggregatedMessage::Text(text)) => {
-                    if let Ok(command) = serde_json::from_str::<Command>(&text) {
-                        let json_message = serde_json::to_string(&command).unwrap();
-                        session.text(json_message).await.unwrap();
-                    } else {
-                        println!("Invalid command received: {}", text);
-                    }
-                }
-                Ok(AggregatedMessage::Binary(bin)) => {
-                    session.binary(bin).await.unwrap();
-                }
-                Ok(AggregatedMessage::Ping(msg)) => {
-                    session.pong(&msg).await.unwrap();
-                }
-                _ => {}
+    let mut max_area = 0.0;
+    let mut best_quad = vec![];
+
+    for contour in contours {
+        let mut approx = opencv::core::Vector::<Point>::new();
+        imgproc::approx_poly_dp(
+            &contour,
+            &mut approx,
+            0.02 * imgproc::arc_length(&contour, true).unwrap(),
+            true,
+        )
+        .unwrap();
+
+        if approx.len() == 4 && imgproc::is_contour_convex(&approx).unwrap() {
+            let area = imgproc::contour_area(&approx, false).unwrap();
+            let bounding = imgproc::bounding_rect(&approx).unwrap();
+
+            let aspect_ratio = bounding.width as f32 / bounding.height as f32;
+            if area > max_area && aspect_ratio > 0.8 && aspect_ratio < 1.2 {
+                max_area = area;
+                best_quad = approx.to_vec();
             }
         }
-    });
+    }
 
-    Ok(res)
+    let x_start = best_quad[0].x as u32;
+    let y_start = best_quad[0].y as u32;
+    let width = best_quad[2].x as u32 - x_start;
+    let height = best_quad[2].y as u32 - y_start;
+
+    (x_start, y_start, width, height)
 }
 
-#[get("/config")]
-async fn get_config(data: web::Data<AppState>) -> impl Responder {
-    let config = data.game_config.lock().unwrap();
-    HttpResponse::Ok().json(&*config)
+fn main() {
+    let _take_screenshot = false;
+    let _extract_pieces = false;
+
+    let start = Instant::now();
+
+    let board = if _take_screenshot {
+        println!("Loaded pieces in: {:?}", start.elapsed());
+        let monitor = select_primary_monitor(false);
+        println!("Monitor selection took: {:?}", start.elapsed());
+        let monitor = monitor.expect("No primary monitor found");
+
+        let raw = capture_entire_screen(&monitor);
+        let dyn_image = DynamicImage::ImageRgba8(raw.clone());
+        println!("Captured screen in: {:?}", start.elapsed());
+        let rat = dynamic_image_to_mat(&dyn_image).unwrap();
+        img_proc::show(&rat, false).unwrap();
+        let coords = get_board_region(&rat);
+
+        let cropped = imageops::crop_imm(&raw, coords.0, coords.1, coords.2, coords.3).to_image();
+        let dynimage = DynamicImage::ImageRgba8(cropped);
+        dynamic_image_to_mat(&dynimage).unwrap()
+    } else {
+        opencv::imgcodecs::imread("board.png", opencv::imgcodecs::IMREAD_UNCHANGED).unwrap()
+    };
+    img_proc::show(&board, false).unwrap();
+
+    if _extract_pieces {
+        extract_pieces(&board).unwrap();
+    }
+
+    let mut pieces: std::collections::HashMap<char, Mat> = std::collections::HashMap::new();
+
+    for &symbol in &['k', 'q', 'b', 'p', 'r', 'n', 'K', 'Q', 'B', 'P', 'R', 'N'] {
+        let path = format!("pieces/{}.png", symbol);
+        let mat = opencv::imgcodecs::imread(&path, opencv::imgcodecs::IMREAD_UNCHANGED).unwrap();
+        pieces.insert(symbol, mat);
+    }
+
+    let mut gray_board = Mat::default();
+    imgproc::cvt_color(&board, &mut gray_board, imgproc::COLOR_BGR2GRAY, 0).unwrap();
+    let mut bin_board = Mat::default();
+    imgproc::threshold(
+        &gray_board,
+        &mut bin_board,
+        127.0,
+        255.0,
+        imgproc::THRESH_BINARY,
+    )
+    .unwrap();
+
+    // TODO! remove clones
+    let arr = [
+        (pieces[&'k'].clone(), 0.1, 'k'),
+        (pieces[&'q'].clone(), 0.1, 'q'),
+        (pieces[&'b'].clone(), 0.1, 'b'),
+        (pieces[&'p'].clone(), 0.1, 'p'),
+        (pieces[&'r'].clone(), 0.1, 'r'),
+        (pieces[&'n'].clone(), 0.1, 'n'),
+        (pieces[&'K'].clone(), 0.1, 'K'),
+        (pieces[&'Q'].clone(), 0.1, 'Q'),
+        (pieces[&'B'].clone(), 0.1, 'B'),
+        (pieces[&'P'].clone(), 0.1, 'P'),
+        (pieces[&'R'].clone(), 0.1, 'R'),
+        (pieces[&'N'].clone(), 0.1, 'N'),
+    ];
+
+    let result = Arc::new(Mutex::new([[' '; 8]; 8]));
+    let bin_board = Arc::new(bin_board);
+
+    let s = Instant::now();
+
+    let mut handles = vec![];
+    for (piece, thres, sign) in arr {
+        let board = Arc::clone(&bin_board);
+        let result_ref = Arc::clone(&result);
+
+        let handle = thread::spawn(move || {
+            let local_result = img_proc::single_process(&board, &piece, thres, sign).unwrap();
+
+            let mut res = result_ref.lock().unwrap();
+            for row in 0..8 {
+                for col in 0..8 {
+                    if local_result[row][col] != ' ' && res[row][col] == ' ' {
+                        res[row][col] = local_result[row][col];
+                    }
+                }
+            }
+        });
+
+        handles.push(handle);
+    }
+
+    for handle in handles {
+        handle.join().unwrap();
+    }
+
+    engine::Board::new(*result.lock().unwrap()).print();
+    println!("Processing took: {:?}", s.elapsed());
 }
 
-#[post("/config")]
-async fn set_config(
-    data: web::Data<AppState>,
-    new_config: web::Json<GameConfig>,
-) -> impl Responder {
-    let mut config = data.game_config.lock().unwrap();
-    *config = new_config.into_inner();
-    HttpResponse::Ok().json("Configuration updated")
+fn extract_pieces(img: &Mat) -> Result<()> {
+    let board_size = img.rows().min(img.cols());
+    let board_size_f = board_size as f32;
+
+    let mut x_edges = vec![];
+    let mut y_edges = vec![];
+
+    for i in 0..=8 {
+        x_edges.push(((i as f32) * board_size_f / 8.0).round() as i32);
+        y_edges.push(((i as f32) * board_size_f / 8.0).round() as i32);
+    }
+
+    let named_fields = vec![
+        ((0, 0), "r"),
+        ((1, 0), "n"),
+        ((2, 0), "b"),
+        ((3, 0), "q"),
+        ((4, 0), "k"),
+        ((0, 1), "p"),
+        ((0, 6), "P"),
+        ((0, 7), "R"),
+        ((1, 7), "N"),
+        ((2, 7), "B"),
+        ((3, 7), "Q"),
+        ((4, 7), "K"),
+    ];
+
+    for ((col, row), name) in named_fields {
+        let x = x_edges[col];
+        let y = y_edges[row];
+        let w = x_edges[col + 1] - x;
+        let h = y_edges[row + 1] - y;
+
+        // TODO!
+        let margin = 5;
+        let x = x + margin;
+        let y = y + margin;
+        let w = (w - 2 * margin).max(1);
+        let h = (h - 2 * margin).max(1);
+
+        let roi = Rect::new(x, y, w, h);
+
+        let img = Mat::roi(img, roi)?;
+
+        let mut thresholded = Mat::default();
+        imgproc::cvt_color(&img, &mut thresholded, imgproc::COLOR_BGR2GRAY, 0)?;
+        let mut bin_board = Mat::default();
+        imgproc::threshold(
+            &thresholded,
+            &mut bin_board,
+            127.0,
+            255.0,
+            imgproc::THRESH_BINARY,
+        )?;
+
+        opencv::imgcodecs::imwrite(
+            &format!("pieces/{name}.png"),
+            &bin_board,
+            &opencv::core::Vector::<i32>::new(),
+        )?;
+    }
+    Ok(())
 }
 
-#[get("/stockfish/config")]
-async fn get_stock_config(data: web::Data<AppState>) -> impl Responder {
-    let config = data.stockfish_config.lock().unwrap();
-    HttpResponse::Ok().json(&*config)
-}
+fn dynamic_image_to_mat(img: &DynamicImage) -> opencv::Result<Mat> {
+    let rgba8 = img.to_rgba8();
+    let (width, height) = rgba8.dimensions();
 
-#[post("/stockfish/config")]
-async fn set_stock_config(
-    data: web::Data<AppState>,
-    new_config: web::Json<StockfishConfig>,
-) -> impl Responder {
-    let mut config = data.stockfish_config.lock().unwrap();
-    *config = new_config.into_inner();
-    HttpResponse::Ok().json("Configuration updated")
-}
+    let mut mat =
+        Mat::new_rows_cols_with_default(height as i32, width as i32, CV_8UC4, Scalar::all(0.0))
+            .unwrap();
 
-#[actix_web::main]
-async fn main() -> std::io::Result<()> {
-    let stockfish_config =
-        config::stockfish::StockfishConfig::new("abc", None, None, None).unwrap();
+    let mat_data = mat.data_bytes_mut().unwrap();
+    mat_data.copy_from_slice(&rgba8.as_raw());
 
-    let app_data = web::Data::new(AppState {
-        commands: Mutex::new(vec![]),
-        game_config: Mutex::new(GameConfig {
-            theme: "default".to_string(),
-            thresholds: Vec::new(),
-            platform: "".to_string(),
-        }),
-        stockfish_config: Mutex::new(stockfish_config),
-    });
-
-    HttpServer::new(move || {
-        App::new()
-            .wrap(
-                Cors::default()
-                    .allowed_origin("http://127.0.0.1:1420")
-                    .allowed_methods(vec!["GET", "POST"])
-                    .allowed_headers(vec!["Content-Type"])
-                    .max_age(3600),
-            )
-            .app_data(app_data.clone())
-            .route("/ws/game", web::get().to(websocket_handler))
-            .service(get_config)
-            .service(set_config)
-            .service(get_stock_config)
-            .service(set_stock_config)
-    })
-    .bind("127.0.0.1:5555")?
-    .run()
-    .await
+    let mut mat_bgra = Mat::default();
+    imgproc::cvt_color(&mat, &mut mat_bgra, imgproc::COLOR_RGBA2BGRA, 0).unwrap();
+    Ok(mat_bgra)
 }
