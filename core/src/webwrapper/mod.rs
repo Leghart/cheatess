@@ -95,95 +95,25 @@ pub trait ChessboardTrackerInterface: Default {
             255.0,
             imgproc::THRESH_BINARY,
         )?;
+        for piece_name in pieces.keys() {
+            let piece_threshold = pieces.get(&piece_name.to_string()).unwrap().1;
+            let piece_image = pieces.get(&piece_name.to_string()).unwrap().clone().0;
 
-        let piece_name = 'p';
-        let piece_threshold = pieces.get(&piece_name.to_string()).unwrap().1;
-        let piece_image = pieces.get(&piece_name.to_string()).unwrap().clone().0;
-
-        // ImageProcessing::show(&bin_board, false)?;
-        // ImageProcessing::show(&piece_image, false)?;
-
-        let mut matched = Mat::default();
-        imgproc::match_template(
-            &bin_board,
-            &piece_image,
-            &mut matched,
-            imgproc::TM_SQDIFF_NORMED, // for SQDIFF  min_loc give better mactch
-            &Mat::default(),
-        )?;
-
-        // ImageProcessing::show(&matched, false)?;
-        let mut min_val = 0.0;
-        let mut max_val = 0.0;
-        let mut min_loc = Point::default();
-        let mut max_loc = Point::default();
-
-        let board_size = board_image.size().unwrap();
-
-        min_max_loc(
-            &matched,
-            Some(&mut min_val),
-            Some(&mut max_val),
-            Some(&mut min_loc),
-            Some(&mut max_loc),
-            &Mat::default(),
-        )?;
-
-        while min_val < piece_threshold {
-            let top_left = min_loc;
-
-            register_piece(
-                (top_left.x, top_left.y),
-                (board_size.width, board_size.height),
-                &piece_name,
-                &mut result,
+            let mut matched = Mat::default();
+            imgproc::match_template(
+                &bin_board,
+                &piece_image,
+                &mut matched,
+                imgproc::TM_SQDIFF_NORMED,
+                &Mat::default(),
             )?;
 
-            // TODO: change hardcoded values
-            let size = matched.size()?;
-            let top_x = top_left.x.max(0).min(size.width - 1);
-            let top_y = top_left.y.max(0).min(size.height - 1);
+            let mut min_val = 0.0;
+            let mut max_val = 0.0;
+            let mut min_loc = Point::default();
+            let mut max_loc = Point::default();
 
-            let rect_x = (top_x as i32 - 22).max(0);
-            let rect_y = (top_y as i32 - 22).max(0);
-
-            let rect_w = (45).min(size.width - rect_x);
-            let rect_h = (45).min(size.height - rect_y);
-
-            let poison = Rect::new(rect_x, rect_y, rect_w, rect_h);
-            // let mut aaa = board_image.clone();
-            // imgproc::rectangle(
-            //     &mut aaa,
-            //     poison,
-            //     Scalar::new(0.0, 255.0, 0.0, 0.0),
-            //     2,
-            //     imgproc::LINE_8,
-            //     0,
-            // )?;
-            // imgproc::circle(
-            //     &mut aaa,
-            //     Point::new(top_x, top_y),
-            //     1,
-            //     Scalar::new(0.0, 0.0, 255.0, 0.0),
-            //     -1,
-            //     imgproc::LINE_8,
-            //     0,
-            // )?;
-            // imgproc::circle(
-            //     &mut aaa,
-            //     top_left,
-            //     1,
-            //     Scalar::new(0.0, 255.0, 255.0, 0.0),
-            //     -1,
-            //     imgproc::LINE_8,
-            //     0,
-            // )?;
-            // ImageProcessing::show(&aaa, false)?;
-
-            let mut result_slice = matched.roi_mut(poison)?;
-            result_slice
-                .set_to(&Scalar::all(1.0), &Mat::default())
-                .unwrap();
+            let board_size = board_image.size().unwrap();
 
             min_max_loc(
                 &matched,
@@ -192,10 +122,75 @@ pub trait ChessboardTrackerInterface: Default {
                 Some(&mut min_loc),
                 Some(&mut max_loc),
                 &Mat::default(),
-            )
-            .unwrap();
-        }
+            )?;
 
+            while min_val < piece_threshold {
+                let top_left = min_loc;
+
+                register_piece(
+                    (top_left.x, top_left.y),
+                    (board_size.width, board_size.height),
+                    &piece_name.chars().next().unwrap(),
+                    &mut result,
+                )?;
+
+                // TODO: change hardcoded values
+                let size = matched.size()?;
+                let top_x = top_left.x.max(0).min(size.width - 1);
+                let top_y = top_left.y.max(0).min(size.height - 1);
+
+                let rect_x = (top_x as i32 - 22).max(0);
+                let rect_y = (top_y as i32 - 22).max(0);
+
+                let rect_w = (45).min(size.width - rect_x);
+                let rect_h = (45).min(size.height - rect_y);
+
+                let poison = Rect::new(rect_x, rect_y, rect_w, rect_h);
+                // let mut aaa = board_image.clone();
+                // imgproc::rectangle(
+                //     &mut aaa,
+                //     poison,
+                //     Scalar::new(0.0, 255.0, 0.0, 0.0),
+                //     2,
+                //     imgproc::LINE_8,
+                //     0,
+                // )?;
+                // imgproc::circle(
+                //     &mut aaa,
+                //     Point::new(top_x, top_y),
+                //     1,
+                //     Scalar::new(0.0, 0.0, 255.0, 0.0),
+                //     -1,
+                //     imgproc::LINE_8,
+                //     0,
+                // )?;
+                // imgproc::circle(
+                //     &mut aaa,
+                //     top_left,
+                //     1,
+                //     Scalar::new(0.0, 255.0, 255.0, 0.0),
+                //     -1,
+                //     imgproc::LINE_8,
+                //     0,
+                // )?;
+                // ImageProcessing::show(&aaa, false)?;
+
+                let mut result_slice = matched.roi_mut(poison)?;
+                result_slice
+                    .set_to(&Scalar::all(1.0), &Mat::default())
+                    .unwrap();
+
+                min_max_loc(
+                    &matched,
+                    Some(&mut min_val),
+                    Some(&mut max_val),
+                    Some(&mut min_loc),
+                    Some(&mut max_loc),
+                    &Mat::default(),
+                )
+                .unwrap();
+            }
+        }
         Ok(result)
     }
 
@@ -332,4 +327,77 @@ fn preprocess_piece(piece_gray: &Mat) -> Result<(Mat, Mat), Box<dyn std::error::
     imgproc::threshold(&gray, &mut mask, 250.0, 255.0, imgproc::THRESH_BINARY_INV)?;
 
     Ok((gray, mask))
+}
+
+pub fn single_process(
+    board_image: &Mat, //binary
+    piece_image: &Mat, //binary
+    result: &mut [[char; 8]; 8],
+    threshold: f64,
+    symbol: char,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut matched = Mat::default();
+    imgproc::match_template(
+        &board_image,
+        &piece_image,
+        &mut matched,
+        imgproc::TM_SQDIFF_NORMED,
+        &Mat::default(),
+    )?;
+
+    let mut min_val = 0.0;
+    let mut max_val = 0.0;
+    let mut min_loc = Point::default();
+    let mut max_loc = Point::default();
+
+    let board_size = board_image.size().unwrap();
+
+    min_max_loc(
+        &matched,
+        Some(&mut min_val),
+        Some(&mut max_val),
+        Some(&mut min_loc),
+        Some(&mut max_loc),
+        &Mat::default(),
+    )?;
+
+    while min_val < threshold {
+        let top_left = min_loc;
+
+        register_piece(
+            (top_left.x, top_left.y),
+            (board_size.width, board_size.height),
+            &symbol,
+            result,
+        )?;
+
+        // TODO: change hardcoded values
+        let size = matched.size()?;
+        let top_x = top_left.x.max(0).min(size.width - 1);
+        let top_y = top_left.y.max(0).min(size.height - 1);
+
+        let rect_x = (top_x as i32 - 22).max(0);
+        let rect_y = (top_y as i32 - 22).max(0);
+
+        let rect_w = (45).min(size.width - rect_x);
+        let rect_h = (45).min(size.height - rect_y);
+
+        let poison = Rect::new(rect_x, rect_y, rect_w, rect_h);
+
+        let mut result_slice = matched.roi_mut(poison)?;
+        result_slice
+            .set_to(&Scalar::all(1.0), &Mat::default())
+            .unwrap();
+
+        min_max_loc(
+            &matched,
+            Some(&mut min_val),
+            Some(&mut max_val),
+            Some(&mut min_loc),
+            Some(&mut max_loc),
+            &Mat::default(),
+        )
+        .unwrap();
+    }
+    Ok(())
 }

@@ -5,34 +5,27 @@ mod stockfish;
 mod utils;
 
 pub mod webwrapper;
-// use image::ImageProcessing;
-use opencv::imgcodecs;
 use std::time::Instant;
 use webwrapper::chesscom::ChesscomWrapper;
-use webwrapper::ChessboardTrackerInterface;
 
-use crossbeam::channel::{bounded, Receiver, Sender};
 use opencv::{
-    core::{split, Mat, Point, Rect, Scalar, Size, Vector, CV_8UC3, CV_8UC4},
-    highgui::{self, destroy_window},
+    core::{Mat, Point, Rect, Scalar, CV_8UC4},
     imgproc,
     prelude::*,
 };
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-use image::{DynamicImage, GenericImageView};
-use opencv::{core::Mat_AUTO_STEP, prelude::*};
+use image::DynamicImage;
 use xcap::Monitor;
 
 use std::io::Read;
 use std::process::{Command, Stdio};
 
-use image::{imageops, ImageBuffer, Rgba};
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
+use image::{ImageBuffer, Rgba};
+use rayon::prelude::*;
 
-use opencv::{prelude::*, types, Result};
+use opencv::Result;
 
 fn select_primary_monitor(primary: bool) -> Option<Monitor> {
     for m in Monitor::all().unwrap() {
@@ -160,28 +153,75 @@ fn main() {
     let tracker = ChesscomWrapper::default();
     let start = Instant::now();
 
-    let r = tracker
-        .process_image(
-            &board,
-            &std::collections::HashMap::from_iter([
-                ('k'.to_string(), (piece1.clone(), 0.1)),
-                ('q'.to_string(), (piece2.clone(), 0.1)),
-                ('b'.to_string(), (piece3.clone(), 0.1)),
-                ('p'.to_string(), (piece4.clone(), 0.1)),
-                ('r'.to_string(), (piece5.clone(), 0.1)),
-                ('n'.to_string(), (piece6.clone(), 0.1)),
-                ('K'.to_string(), (piece11.clone(), 0.1)),
-                ('Q'.to_string(), (piece22.clone(), 0.1)),
-                ('B'.to_string(), (piece33.clone(), 0.1)),
-                ('P'.to_string(), (piece44.clone(), 0.1)),
-                ('R'.to_string(), (piece55.clone(), 0.1)),
-                ('N'.to_string(), (piece66.clone(), 0.1)),
-            ]),
-        )
-        .unwrap();
-    println!("Processed image in: {:?}", start.elapsed());
-    let board = engine::Board::new(r);
-    board.print();
+    // let r = tracker
+    //     .process_image(
+    //         &board,
+    //         &std::collections::HashMap::from_iter([
+    //             ('k'.to_string(), (piece1.clone(), 0.1)),
+    //             ('q'.to_string(), (piece2.clone(), 0.1)),
+    //             ('b'.to_string(), (piece3.clone(), 0.1)),
+    //             ('p'.to_string(), (piece4.clone(), 0.1)),
+    //             ('r'.to_string(), (piece5.clone(), 0.1)),
+    //             ('n'.to_string(), (piece6.clone(), 0.1)),
+    //             ('K'.to_string(), (piece11.clone(), 0.1)),
+    //             ('Q'.to_string(), (piece22.clone(), 0.1)),
+    //             ('B'.to_string(), (piece33.clone(), 0.1)),
+    //             ('P'.to_string(), (piece44.clone(), 0.1)),
+    //             ('R'.to_string(), (piece55.clone(), 0.1)),
+    //             ('N'.to_string(), (piece66.clone(), 0.1)),
+    //         ]),
+    //     )
+    //     .unwrap();
+    let mut gray_board = Mat::default();
+    imgproc::cvt_color(&board, &mut gray_board, imgproc::COLOR_BGR2GRAY, 0).unwrap();
+    let mut bin_board = Mat::default();
+    imgproc::threshold(
+        &gray_board,
+        &mut bin_board,
+        127.0,
+        255.0,
+        imgproc::THRESH_BINARY,
+    )
+    .unwrap();
+
+    let arr = [
+        (piece1, 0.1, 'k'),
+        (piece2, 0.1, 'q'),
+        (piece3, 0.1, 'b'),
+        (piece4, 0.1, 'p'),
+        (piece5, 0.1, 'r'),
+        (piece6, 0.1, 'n'),
+        (piece11, 0.1, 'K'),
+        (piece22, 0.1, 'Q'),
+        (piece33, 0.1, 'B'),
+        (piece44, 0.1, 'P'),
+        (piece55, 0.1, 'R'),
+        (piece66, 0.1, 'N'),
+    ];
+
+    let result: [[char; 8]; 8] = [[' '; 8]; 8];
+    let mut handles = vec![];
+
+    let s = Instant::now();
+    for (piece, thres, sign) in arr {
+        let mut local_result = [[' '; 8]; 8];
+        let bin_board = bin_board.clone();
+        let handle = thread::spawn(move || {
+            webwrapper::single_process(&bin_board, &piece, &mut local_result, thres, sign).unwrap();
+            local_result
+        });
+        handles.push(handle);
+    }
+
+    let mut results = vec![];
+    for handle in handles {
+        let rr = handle.join().unwrap();
+        results.push(rr);
+    }
+    let merged = merge_results(results);
+    engine::Board::new(merged).print();
+
+    println!("Processing took: {:?}", s.elapsed());
 }
 
 fn extract_pieces(img: &Mat) -> Result<()> {
@@ -266,4 +306,18 @@ fn dynamic_image_to_mat(img: &DynamicImage) -> opencv::Result<Mat> {
 
 fn process_image(image: &Mat) -> Result<[[char; 8]; 8], Box<dyn std::error::Error>> {
     Ok([['.'; 8]; 8])
+}
+
+fn merge_results(results: Vec<[[char; 8]; 8]>) -> [[char; 8]; 8] {
+    let mut merged = [[' '; 8]; 8];
+    for result in results {
+        for row in 0..8 {
+            for col in 0..8 {
+                if result[row][col] != ' ' {
+                    merged[row][col] = result[row][col];
+                }
+            }
+        }
+    }
+    merged
 }

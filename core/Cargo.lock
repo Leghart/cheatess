@@ -354,6 +354,7 @@ dependencies = [
  "device_query",
  "image 0.24.9",
  "opencv",
+ "rayon",
  "rdev",
  "rstest",
  "screenshots",
