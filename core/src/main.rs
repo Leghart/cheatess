@@ -97,7 +97,7 @@ fn get_board_region(raw: &Mat) -> (u32, u32, u32, u32) {
 }
 
 fn main() {
-    let _take_screenshot = true;
+    let _take_screenshot = false;
     let _extract_pieces = false;
 
     let start = Instant::now();
@@ -174,8 +174,7 @@ fn main() {
         let result_ref = Arc::clone(&result);
 
         let handle = thread::spawn(move || {
-            let mut local_result = [[' '; 8]; 8];
-            img_proc::single_process(&board, &piece, &mut local_result, thres, sign).unwrap();
+            let local_result = img_proc::single_process(&board, &piece, thres, sign).unwrap();
 
             let mut res = result_ref.lock().unwrap();
             for row in 0..8 {

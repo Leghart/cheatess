@@ -27,10 +27,10 @@ pub fn show(image: &Mat, destroy: bool) -> Result<(), Box<dyn std::error::Error>
 pub fn single_process(
     board_image: &Mat,
     piece_image: &Mat,
-    result: &mut [[char; 8]; 8],
     threshold: f64,
     symbol: char,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<[[char; 8]; 8], Box<dyn std::error::Error>> {
+    let mut result: [[char; 8]; 8] = [[' '; 8]; 8];
     let empty_mask = Mat::default();
 
     let mut matched = Mat::default();
@@ -71,7 +71,7 @@ pub fn single_process(
             (top_left.x, top_left.y),
             (board_size.width, board_size.height),
             symbol,
-            result,
+            &mut result,
         )?;
 
         let top_x = top_left.x.clamp(0, matched_size.width - 1);
@@ -97,5 +97,5 @@ pub fn single_process(
         )?;
     }
 
-    Ok(())
+    Ok(result)
 }
