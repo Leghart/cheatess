@@ -80,16 +80,16 @@ impl Board {
 pub fn register_piece(
     point: (i32, i32),
     board_size: (i32, i32),
-    piece: &char,
+    piece: char,
     board: &mut [[char; 8]; 8],
 ) -> Result<(), Box<dyn std::error::Error>> {
     let tile_width = board_size.0 / 8;
     let tile_height = board_size.1 / 8;
 
-    let row = (point.0 / tile_height).clamp(0, 7);
-    let col = (point.1 / tile_width).clamp(0, 7);
+    let row = (point.0 / tile_height).clamp(0, 7) as usize;
+    let col = (point.1 / tile_width).clamp(0, 7) as usize;
 
-    board[row as usize][col as usize] = *piece;
+    board[row][col] = piece;
     Ok(())
 }
 
@@ -170,7 +170,7 @@ mod tests {
         #[case] result_row_col: (usize, usize),
         mut empty_board: [[char; 8]; 8],
     ) {
-        assert!(register_piece(point, board_size, &'X', &mut empty_board).is_ok());
+        assert!(register_piece(point, board_size, 'X', &mut empty_board).is_ok());
         assert_eq!(empty_board[result_row_col.0][result_row_col.1], 'X');
     }
 

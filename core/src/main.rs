@@ -1,12 +1,10 @@
 mod config;
 mod engine;
-mod myimage;
+mod img_proc;
 mod stockfish;
 mod utils;
 
-pub mod webwrapper;
 use std::time::Instant;
-use webwrapper::chesscom::ChesscomWrapper;
 
 use opencv::{
     core::{Mat, Point, Rect, Scalar, CV_8UC4},
@@ -16,14 +14,10 @@ use opencv::{
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-use image::DynamicImage;
+use image::{imageops, DynamicImage};
 use xcap::Monitor;
 
-use std::io::Read;
-use std::process::{Command, Stdio};
-
 use image::{ImageBuffer, Rgba};
-use rayon::prelude::*;
 
 use opencv::Result;
 
@@ -103,75 +97,44 @@ fn get_board_region(raw: &Mat) -> (u32, u32, u32, u32) {
 }
 
 fn main() {
-    let start = Instant::now();
-    let piece1 =
-        opencv::imgcodecs::imread("pieces/k.png", opencv::imgcodecs::IMREAD_UNCHANGED).unwrap();
-    let piece2 =
-        opencv::imgcodecs::imread("pieces/q.png", opencv::imgcodecs::IMREAD_UNCHANGED).unwrap();
-    let piece3 =
-        opencv::imgcodecs::imread("pieces/b.png", opencv::imgcodecs::IMREAD_UNCHANGED).unwrap();
-    let piece4 =
-        opencv::imgcodecs::imread("pieces/p.png", opencv::imgcodecs::IMREAD_UNCHANGED).unwrap();
-    let piece5 =
-        opencv::imgcodecs::imread("pieces/r.png", opencv::imgcodecs::IMREAD_UNCHANGED).unwrap();
-    let piece6 =
-        opencv::imgcodecs::imread("pieces/n.png", opencv::imgcodecs::IMREAD_UNCHANGED).unwrap();
+    let _take_screenshot = true;
+    let _extract_pieces = false;
 
-    let piece11 =
-        opencv::imgcodecs::imread("pieces/K.png", opencv::imgcodecs::IMREAD_UNCHANGED).unwrap();
-    let piece22 =
-        opencv::imgcodecs::imread("pieces/Q.png", opencv::imgcodecs::IMREAD_UNCHANGED).unwrap();
-    let piece33 =
-        opencv::imgcodecs::imread("pieces/B.png", opencv::imgcodecs::IMREAD_UNCHANGED).unwrap();
-    let piece44 =
-        opencv::imgcodecs::imread("pieces/P.png", opencv::imgcodecs::IMREAD_UNCHANGED).unwrap();
-    let piece55 =
-        opencv::imgcodecs::imread("pieces/R.png", opencv::imgcodecs::IMREAD_UNCHANGED).unwrap();
-    let piece66 =
-        opencv::imgcodecs::imread("pieces/N.png", opencv::imgcodecs::IMREAD_UNCHANGED).unwrap();
-
-    // println!("Loaded pieces in: {:?}", start.elapsed());
-    // let monitor = select_primary_monitor(false);
-    // println!("Monitor selection took: {:?}", start.elapsed());
-    // let monitor = monitor.expect("No primary monitor found");
-
-    // let raw = capture_entire_screen(&monitor);
-    // let dyn_image = DynamicImage::ImageRgba8(raw.clone());
-    // println!("Captured screen in: {:?}", start.elapsed());
-    // let rat = dynamic_image_to_mat(&dyn_image).unwrap();
-    // let coords = get_board_region(&rat);
-
-    // let cropped = imageops::crop_imm(&raw, coords.0, coords.1, coords.2, coords.3).to_image();
-    // let dynimage = DynamicImage::ImageRgba8(cropped);
-    // let board = dynamic_image_to_mat(&dynimage).unwrap();
-    let board =
-        opencv::imgcodecs::imread("board.png", opencv::imgcodecs::IMREAD_UNCHANGED).unwrap();
-
-    // println!("Cropped board in: {:?}", start.elapsed());
-    extract_pieces(&board).unwrap();
-
-    let tracker = ChesscomWrapper::default();
     let start = Instant::now();
 
-    // let r = tracker
-    //     .process_image(
-    //         &board,
-    //         &std::collections::HashMap::from_iter([
-    //             ('k'.to_string(), (piece1.clone(), 0.1)),
-    //             ('q'.to_string(), (piece2.clone(), 0.1)),
-    //             ('b'.to_string(), (piece3.clone(), 0.1)),
-    //             ('p'.to_string(), (piece4.clone(), 0.1)),
-    //             ('r'.to_string(), (piece5.clone(), 0.1)),
-    //             ('n'.to_string(), (piece6.clone(), 0.1)),
-    //             ('K'.to_string(), (piece11.clone(), 0.1)),
-    //             ('Q'.to_string(), (piece22.clone(), 0.1)),
-    //             ('B'.to_string(), (piece33.clone(), 0.1)),
-    //             ('P'.to_string(), (piece44.clone(), 0.1)),
-    //             ('R'.to_string(), (piece55.clone(), 0.1)),
-    //             ('N'.to_string(), (piece66.clone(), 0.1)),
-    //         ]),
-    //     )
-    //     .unwrap();
+    let board = if _take_screenshot {
+        println!("Loaded pieces in: {:?}", start.elapsed());
+        let monitor = select_primary_monitor(false);
+        println!("Monitor selection took: {:?}", start.elapsed());
+        let monitor = monitor.expect("No primary monitor found");
+
+        let raw = capture_entire_screen(&monitor);
+        let dyn_image = DynamicImage::ImageRgba8(raw.clone());
+        println!("Captured screen in: {:?}", start.elapsed());
+        let rat = dynamic_image_to_mat(&dyn_image).unwrap();
+        img_proc::show(&rat, false).unwrap();
+        let coords = get_board_region(&rat);
+
+        let cropped = imageops::crop_imm(&raw, coords.0, coords.1, coords.2, coords.3).to_image();
+        let dynimage = DynamicImage::ImageRgba8(cropped);
+        dynamic_image_to_mat(&dynimage).unwrap()
+    } else {
+        opencv::imgcodecs::imread("board.png", opencv::imgcodecs::IMREAD_UNCHANGED).unwrap()
+    };
+    img_proc::show(&board, false).unwrap();
+
+    if _extract_pieces {
+        extract_pieces(&board).unwrap();
+    }
+
+    let mut pieces: std::collections::HashMap<char, Mat> = std::collections::HashMap::new();
+
+    for &symbol in &['k', 'q', 'b', 'p', 'r', 'n', 'K', 'Q', 'B', 'P', 'R', 'N'] {
+        let path = format!("pieces/{}.png", symbol);
+        let mat = opencv::imgcodecs::imread(&path, opencv::imgcodecs::IMREAD_UNCHANGED).unwrap();
+        pieces.insert(symbol, mat);
+    }
+
     let mut gray_board = Mat::default();
     imgproc::cvt_color(&board, &mut gray_board, imgproc::COLOR_BGR2GRAY, 0).unwrap();
     let mut bin_board = Mat::default();
@@ -184,43 +147,54 @@ fn main() {
     )
     .unwrap();
 
+    // TODO! remove clones
     let arr = [
-        (piece1, 0.1, 'k'),
-        (piece2, 0.1, 'q'),
-        (piece3, 0.1, 'b'),
-        (piece4, 0.1, 'p'),
-        (piece5, 0.1, 'r'),
-        (piece6, 0.1, 'n'),
-        (piece11, 0.1, 'K'),
-        (piece22, 0.1, 'Q'),
-        (piece33, 0.1, 'B'),
-        (piece44, 0.1, 'P'),
-        (piece55, 0.1, 'R'),
-        (piece66, 0.1, 'N'),
+        (pieces[&'k'].clone(), 0.1, 'k'),
+        (pieces[&'q'].clone(), 0.1, 'q'),
+        (pieces[&'b'].clone(), 0.1, 'b'),
+        (pieces[&'p'].clone(), 0.1, 'p'),
+        (pieces[&'r'].clone(), 0.1, 'r'),
+        (pieces[&'n'].clone(), 0.1, 'n'),
+        (pieces[&'K'].clone(), 0.1, 'K'),
+        (pieces[&'Q'].clone(), 0.1, 'Q'),
+        (pieces[&'B'].clone(), 0.1, 'B'),
+        (pieces[&'P'].clone(), 0.1, 'P'),
+        (pieces[&'R'].clone(), 0.1, 'R'),
+        (pieces[&'N'].clone(), 0.1, 'N'),
     ];
 
-    let result: [[char; 8]; 8] = [[' '; 8]; 8];
-    let mut handles = vec![];
+    let result = Arc::new(Mutex::new([[' '; 8]; 8]));
+    let bin_board = Arc::new(bin_board);
 
     let s = Instant::now();
+
+    let mut handles = vec![];
     for (piece, thres, sign) in arr {
-        let mut local_result = [[' '; 8]; 8];
-        let bin_board = bin_board.clone();
+        let board = Arc::clone(&bin_board);
+        let result_ref = Arc::clone(&result);
+
         let handle = thread::spawn(move || {
-            webwrapper::single_process(&bin_board, &piece, &mut local_result, thres, sign).unwrap();
-            local_result
+            let mut local_result = [[' '; 8]; 8];
+            img_proc::single_process(&board, &piece, &mut local_result, thres, sign).unwrap();
+
+            let mut res = result_ref.lock().unwrap();
+            for row in 0..8 {
+                for col in 0..8 {
+                    if local_result[row][col] != ' ' && res[row][col] == ' ' {
+                        res[row][col] = local_result[row][col];
+                    }
+                }
+            }
         });
+
         handles.push(handle);
     }
 
-    let mut results = vec![];
     for handle in handles {
-        let rr = handle.join().unwrap();
-        results.push(rr);
+        handle.join().unwrap();
     }
-    let merged = merge_results(results);
-    engine::Board::new(merged).print();
 
+    engine::Board::new(*result.lock().unwrap()).print();
     println!("Processing took: {:?}", s.elapsed());
 }
 
@@ -302,22 +276,4 @@ fn dynamic_image_to_mat(img: &DynamicImage) -> opencv::Result<Mat> {
     let mut mat_bgra = Mat::default();
     imgproc::cvt_color(&mat, &mut mat_bgra, imgproc::COLOR_RGBA2BGRA, 0).unwrap();
     Ok(mat_bgra)
-}
-
-fn process_image(image: &Mat) -> Result<[[char; 8]; 8], Box<dyn std::error::Error>> {
-    Ok([['.'; 8]; 8])
-}
-
-fn merge_results(results: Vec<[[char; 8]; 8]>) -> [[char; 8]; 8] {
-    let mut merged = [[' '; 8]; 8];
-    for result in results {
-        for row in 0..8 {
-            for col in 0..8 {
-                if result[row][col] != ' ' {
-                    merged[row][col] = result[row][col];
-                }
-            }
-        }
-    }
-    merged
 }
