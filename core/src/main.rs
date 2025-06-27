@@ -96,6 +96,54 @@ fn get_board_region(raw: &Mat) -> (u32, u32, u32, u32) {
     (x_start, y_start, width, height)
 }
 
+// default threshold = 500
+fn check_difference(img1: &Mat, img2: &Mat, threshold: i32) -> bool {
+    let mut gray1 = Mat::default();
+    let mut gray2 = Mat::default();
+    imgproc::cvt_color(&img1, &mut gray1, imgproc::COLOR_BGR2GRAY, 0).unwrap();
+    imgproc::cvt_color(&img2, &mut gray2, imgproc::COLOR_BGR2GRAY, 0).unwrap();
+
+    let cell_w = gray1.cols() / 8;
+    let cell_h = gray1.rows() / 8;
+
+    for row in 0..8 {
+        for col in 0..8 {
+            let roi = Rect::new(col * cell_w, row * cell_h, cell_w, cell_h);
+            let patch1 = Mat::roi(&gray1, roi).unwrap();
+            let patch2 = Mat::roi(&gray2, roi).unwrap();
+
+            let mut thresh1 = Mat::default();
+            imgproc::threshold(
+                &patch1,
+                &mut thresh1,
+                50.0,
+                255.0,
+                imgproc::THRESH_BINARY_INV,
+            )
+            .unwrap();
+
+            let mut thresh2 = Mat::default();
+            imgproc::threshold(
+                &patch2,
+                &mut thresh2,
+                50.0,
+                255.0,
+                imgproc::THRESH_BINARY_INV,
+            )
+            .unwrap();
+
+            let nonzero1 = opencv::core::count_non_zero(&thresh1).unwrap();
+            let nonzero2 = opencv::core::count_non_zero(&thresh2).unwrap();
+
+            if (nonzero1 > threshold) != (nonzero2 > threshold) {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
 fn main() {
     let _take_screenshot = false;
     let _extract_pieces = false;
@@ -112,7 +160,7 @@ fn main() {
         let dyn_image = DynamicImage::ImageRgba8(raw.clone());
         println!("Captured screen in: {:?}", start.elapsed());
         let rat = dynamic_image_to_mat(&dyn_image).unwrap();
-        img_proc::show(&rat, false).unwrap();
+        // img_proc::show(&rat, false).unwrap();
         let coords = get_board_region(&rat);
 
         let cropped = imageops::crop_imm(&raw, coords.0, coords.1, coords.2, coords.3).to_image();
@@ -121,7 +169,7 @@ fn main() {
     } else {
         opencv::imgcodecs::imread("board.png", opencv::imgcodecs::IMREAD_UNCHANGED).unwrap()
     };
-    img_proc::show(&board, false).unwrap();
+    // img_proc::show(&board, false).unwrap();
 
     if _extract_pieces {
         extract_pieces(&board).unwrap();
@@ -149,18 +197,18 @@ fn main() {
 
     // TODO! remove clones
     let arr = [
-        (pieces[&'k'].clone(), 0.1, 'k'),
-        (pieces[&'q'].clone(), 0.1, 'q'),
-        (pieces[&'b'].clone(), 0.1, 'b'),
-        (pieces[&'p'].clone(), 0.1, 'p'),
-        (pieces[&'r'].clone(), 0.1, 'r'),
-        (pieces[&'n'].clone(), 0.1, 'n'),
-        (pieces[&'K'].clone(), 0.1, 'K'),
-        (pieces[&'Q'].clone(), 0.1, 'Q'),
-        (pieces[&'B'].clone(), 0.1, 'B'),
         (pieces[&'P'].clone(), 0.1, 'P'),
+        (pieces[&'p'].clone(), 0.1, 'p'),
+        (pieces[&'B'].clone(), 0.1, 'B'),
+        (pieces[&'b'].clone(), 0.1, 'b'),
+        (pieces[&'r'].clone(), 0.1, 'r'),
         (pieces[&'R'].clone(), 0.1, 'R'),
+        (pieces[&'n'].clone(), 0.1, 'n'),
         (pieces[&'N'].clone(), 0.1, 'N'),
+        (pieces[&'q'].clone(), 0.1, 'q'),
+        (pieces[&'Q'].clone(), 0.1, 'Q'),
+        (pieces[&'k'].clone(), 0.1, 'k'),
+        (pieces[&'K'].clone(), 0.1, 'K'),
     ];
 
     let result = Arc::new(Mutex::new([[' '; 8]; 8]));
