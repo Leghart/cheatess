@@ -15,28 +15,13 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use image::{imageops, DynamicImage};
-use xcap::Monitor;
-
-use image::{ImageBuffer, Rgba};
 
 use opencv::Result;
+use screenshots::Screen;
 
-fn select_primary_monitor(primary: bool) -> Option<Monitor> {
-    for m in Monitor::all().unwrap() {
-        if primary && m.is_primary().unwrap() {
-            return Some(m);
-        } else if !primary && !m.is_primary().unwrap() {
-            return Some(m);
-        }
-    }
-    None
-}
-
-fn capture_entire_screen(monitor: &Monitor) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
-    let capture = monitor.capture_image().unwrap();
-
-    ImageBuffer::<Rgba<u8>, _>::from_raw(capture.width(), capture.height(), capture.into_vec())
-        .unwrap()
+fn select_monitor(screen: usize) -> Option<Screen> {
+    let screens = Screen::all().unwrap();
+    Some(screens[screen]) // TODO!: temporary
 }
 
 // This function captures the screen and returns the region of the chessboard
@@ -145,107 +130,78 @@ fn check_difference(img1: &Mat, img2: &Mat, threshold: i32) -> bool {
 }
 
 fn main() {
-    let _take_screenshot = false;
-    let _extract_pieces = false;
+    let monitor = select_monitor(0).expect("No primary monitor found");
 
-    let start = Instant::now();
+    let raw = monitor.capture().unwrap();
+    let dyn_image = DynamicImage::ImageRgba8(raw.clone());
+    let rat = dynamic_image_to_mat(&dyn_image).unwrap();
 
-    let board = if _take_screenshot {
-        println!("Loaded pieces in: {:?}", start.elapsed());
-        let monitor = select_primary_monitor(false);
-        println!("Monitor selection took: {:?}", start.elapsed());
-        let monitor = monitor.expect("No primary monitor found");
+    let coords = get_board_region(&rat);
 
-        let raw = capture_entire_screen(&monitor);
-        let dyn_image = DynamicImage::ImageRgba8(raw.clone());
+    let cropped = imageops::crop_imm(&raw, coords.0, coords.1, coords.2, coords.3).to_image();
+    let dyn_image = DynamicImage::ImageRgba8(cropped.clone());
+    let board = dynamic_image_to_mat(&dyn_image).unwrap();
+    let pieces = extract_pieces(&board).unwrap();
+
+    loop {
+        let start = Instant::now();
+        let raw = monitor.capture().unwrap(); // TODO? a bit inefficient, but works
+
         println!("Captured screen in: {:?}", start.elapsed());
-        let rat = dynamic_image_to_mat(&dyn_image).unwrap();
-        // img_proc::show(&rat, false).unwrap();
-        let coords = get_board_region(&rat);
-
         let cropped = imageops::crop_imm(&raw, coords.0, coords.1, coords.2, coords.3).to_image();
-        let dynimage = DynamicImage::ImageRgba8(cropped);
-        dynamic_image_to_mat(&dynimage).unwrap()
-    } else {
-        opencv::imgcodecs::imread("board.png", opencv::imgcodecs::IMREAD_UNCHANGED).unwrap()
-    };
-    // img_proc::show(&board, false).unwrap();
+        let dyn_image = DynamicImage::ImageRgba8(cropped.clone());
+        let board = dynamic_image_to_mat(&dyn_image).unwrap();
 
-    if _extract_pieces {
-        extract_pieces(&board).unwrap();
-    }
+        let mut gray_board = Mat::default();
+        imgproc::cvt_color(&board, &mut gray_board, imgproc::COLOR_BGR2GRAY, 0).unwrap();
+        let mut bin_board = Mat::default();
+        imgproc::threshold(
+            &gray_board,
+            &mut bin_board,
+            127.0,
+            255.0,
+            imgproc::THRESH_BINARY,
+        )
+        .unwrap();
+        let result = Arc::new(Mutex::new([[' '; 8]; 8]));
+        let bin_board = Arc::new(bin_board);
 
-    let mut pieces: std::collections::HashMap<char, Mat> = std::collections::HashMap::new();
+        println!("Board processed in: {:?}", start.elapsed());
+        let mut handles = vec![];
+        //TODO! temporary
+        for (sign, piece) in pieces.clone() {
+            let board = Arc::clone(&bin_board);
+            let result_ref = Arc::clone(&result);
+            let piece = piece.clone();
 
-    for &symbol in &['k', 'q', 'b', 'p', 'r', 'n', 'K', 'Q', 'B', 'P', 'R', 'N'] {
-        let path = format!("pieces/{}.png", symbol);
-        let mat = opencv::imgcodecs::imread(&path, opencv::imgcodecs::IMREAD_UNCHANGED).unwrap();
-        pieces.insert(symbol, mat);
-    }
+            let handle = thread::spawn(move || {
+                let local_result = img_proc::single_process(&board, &piece, 0.1, sign).unwrap();
 
-    let mut gray_board = Mat::default();
-    imgproc::cvt_color(&board, &mut gray_board, imgproc::COLOR_BGR2GRAY, 0).unwrap();
-    let mut bin_board = Mat::default();
-    imgproc::threshold(
-        &gray_board,
-        &mut bin_board,
-        127.0,
-        255.0,
-        imgproc::THRESH_BINARY,
-    )
-    .unwrap();
-
-    // TODO! remove clones
-    let arr = [
-        (pieces[&'P'].clone(), 0.1, 'P'),
-        (pieces[&'p'].clone(), 0.1, 'p'),
-        (pieces[&'B'].clone(), 0.1, 'B'),
-        (pieces[&'b'].clone(), 0.1, 'b'),
-        (pieces[&'r'].clone(), 0.1, 'r'),
-        (pieces[&'R'].clone(), 0.1, 'R'),
-        (pieces[&'n'].clone(), 0.1, 'n'),
-        (pieces[&'N'].clone(), 0.1, 'N'),
-        (pieces[&'q'].clone(), 0.1, 'q'),
-        (pieces[&'Q'].clone(), 0.1, 'Q'),
-        (pieces[&'k'].clone(), 0.1, 'k'),
-        (pieces[&'K'].clone(), 0.1, 'K'),
-    ];
-
-    let result = Arc::new(Mutex::new([[' '; 8]; 8]));
-    let bin_board = Arc::new(bin_board);
-
-    let s = Instant::now();
-
-    let mut handles = vec![];
-    for (piece, thres, sign) in arr {
-        let board = Arc::clone(&bin_board);
-        let result_ref = Arc::clone(&result);
-
-        let handle = thread::spawn(move || {
-            let local_result = img_proc::single_process(&board, &piece, thres, sign).unwrap();
-
-            let mut res = result_ref.lock().unwrap();
-            for row in 0..8 {
-                for col in 0..8 {
-                    if local_result[row][col] != ' ' && res[row][col] == ' ' {
-                        res[row][col] = local_result[row][col];
+                let mut res = result_ref.lock().unwrap();
+                for row in 0..8 {
+                    for col in 0..8 {
+                        if local_result[row][col] != ' ' && res[row][col] == ' ' {
+                            res[row][col] = local_result[row][col];
+                        }
                     }
                 }
-            }
-        });
+            });
 
-        handles.push(handle);
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+        println!("All: {:?}", start.elapsed());
+
+        engine::Board::new(*result.lock().unwrap()).print();
     }
-
-    for handle in handles {
-        handle.join().unwrap();
-    }
-
-    engine::Board::new(*result.lock().unwrap()).print();
-    println!("Processing took: {:?}", s.elapsed());
 }
 
-fn extract_pieces(img: &Mat) -> Result<()> {
+fn extract_pieces(
+    img: &Mat,
+) -> Result<std::collections::HashMap<char, Mat>, Box<dyn std::error::Error>> {
     let board_size = img.rows().min(img.cols());
     let board_size_f = board_size as f32;
 
@@ -258,27 +214,28 @@ fn extract_pieces(img: &Mat) -> Result<()> {
     }
 
     let named_fields = vec![
-        ((0, 0), "r"),
-        ((1, 0), "n"),
-        ((2, 0), "b"),
-        ((3, 0), "q"),
-        ((4, 0), "k"),
-        ((0, 1), "p"),
-        ((0, 6), "P"),
-        ((0, 7), "R"),
-        ((1, 7), "N"),
-        ((2, 7), "B"),
-        ((3, 7), "Q"),
-        ((4, 7), "K"),
+        ((0, 0), 'r'),
+        ((1, 0), 'n'),
+        ((2, 0), 'b'),
+        ((3, 0), 'q'),
+        ((4, 0), 'k'),
+        ((0, 1), 'p'),
+        ((0, 6), 'P'),
+        ((0, 7), 'R'),
+        ((1, 7), 'N'),
+        ((2, 7), 'B'),
+        ((3, 7), 'Q'),
+        ((4, 7), 'K'),
     ];
 
+    let mut result = std::collections::HashMap::new();
     for ((col, row), name) in named_fields {
         let x = x_edges[col];
         let y = y_edges[row];
         let w = x_edges[col + 1] - x;
         let h = y_edges[row + 1] - y;
 
-        // TODO!
+        // Add a margin to the piece extraction area
         let margin = 5;
         let x = x + margin;
         let y = y + margin;
@@ -286,7 +243,6 @@ fn extract_pieces(img: &Mat) -> Result<()> {
         let h = (h - 2 * margin).max(1);
 
         let roi = Rect::new(x, y, w, h);
-
         let img = Mat::roi(img, roi)?;
 
         let mut thresholded = Mat::default();
@@ -299,14 +255,9 @@ fn extract_pieces(img: &Mat) -> Result<()> {
             255.0,
             imgproc::THRESH_BINARY,
         )?;
-
-        opencv::imgcodecs::imwrite(
-            &format!("pieces/{name}.png"),
-            &bin_board,
-            &opencv::core::Vector::<i32>::new(),
-        )?;
+        result.insert(name, bin_board);
     }
-    Ok(())
+    Ok(result)
 }
 
 fn dynamic_image_to_mat(img: &DynamicImage) -> opencv::Result<Mat> {

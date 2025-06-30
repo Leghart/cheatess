@@ -1,7 +1,6 @@
 use opencv::core::Rect;
-extern crate serde;
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
+#[derive(PartialEq, Debug)]
 pub struct ScreenRegion {
     x: i32,
     y: i32,
@@ -10,6 +9,7 @@ pub struct ScreenRegion {
 }
 
 impl ScreenRegion {
+    #[allow(dead_code)]
     pub fn new(x: i32, y: i32, width: u32, height: u32) -> Self {
         ScreenRegion {
             x,
@@ -19,6 +19,7 @@ impl ScreenRegion {
         }
     }
 
+    #[allow(dead_code)]
     pub fn from_rect(rect: Rect) -> Self {
         ScreenRegion {
             x: rect.x,
@@ -28,6 +29,7 @@ impl ScreenRegion {
         }
     }
 
+    #[allow(dead_code)]
     pub fn values(&self) -> (i32, i32, u32, u32) {
         return (self.x, self.y, self.width, self.height);
     }
