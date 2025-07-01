@@ -1,8 +1,6 @@
-mod config;
 mod engine;
 mod img_proc;
 mod stockfish;
-mod utils;
 
 use std::time::Instant;
 
@@ -26,14 +24,10 @@ fn select_monitor(screen: usize) -> Option<Screen> {
 
 // This function captures the screen and returns the region of the chessboard
 // with the following steps:
-// - Convert the captured image to grayscale
 // - Apply Canny edge detection to find the edges
 // - Find contours in the edge-detected image
 // - Approximate the contours to find quadrilaterals
-fn get_board_region(raw: &Mat) -> (u32, u32, u32, u32) {
-    let mut gray = Mat::default();
-    imgproc::cvt_color(&raw, &mut gray, imgproc::COLOR_BGR2GRAY, 0).unwrap();
-
+fn get_board_region(gray: &Mat) -> (u32, u32, u32, u32) {
     // contours without blurring to keep sharp edges
     let mut edges = Mat::default();
     imgproc::canny(&gray, &mut edges, 50.0, 150.0, 3, false).unwrap();
@@ -82,20 +76,23 @@ fn get_board_region(raw: &Mat) -> (u32, u32, u32, u32) {
 }
 
 // default threshold = 500
-fn check_difference(img1: &Mat, img2: &Mat, threshold: i32) -> bool {
-    let mut gray1 = Mat::default();
-    let mut gray2 = Mat::default();
-    imgproc::cvt_color(&img1, &mut gray1, imgproc::COLOR_BGR2GRAY, 0).unwrap();
-    imgproc::cvt_color(&img2, &mut gray2, imgproc::COLOR_BGR2GRAY, 0).unwrap();
-
+fn images_have_differences(gray1: &Mat, gray2: &Mat, threshold: i32) -> bool {
     let cell_w = gray1.cols() / 8;
     let cell_h = gray1.rows() / 8;
-
+    // TODO!: to fix
+    println!("Cell size: {}x{}", cell_w, cell_h); // Debugging output
     for row in 0..8 {
         for col in 0..8 {
-            let roi = Rect::new(col * cell_w, row * cell_h, cell_w, cell_h);
-            let patch1 = Mat::roi(&gray1, roi).unwrap();
-            let patch2 = Mat::roi(&gray2, roi).unwrap();
+            let x = col * cell_w;
+            let y = row * cell_h;
+
+            let width = if col == 7 { gray1.cols() - x } else { cell_w };
+            let height = if row == 7 { gray1.rows() - y } else { cell_h };
+
+            let roi = Rect::new(x, y, width, height);
+            println!("ROI: {:?}", roi); // Debugging output
+            let patch1 = Mat::roi(gray1, roi).unwrap();
+            let patch2 = Mat::roi(gray2, roi).unwrap();
 
             let mut thresh1 = Mat::default();
             imgproc::threshold(
@@ -134,14 +131,21 @@ fn main() {
 
     let raw = monitor.capture().unwrap();
     let dyn_image = DynamicImage::ImageRgba8(raw.clone());
-    let rat = dynamic_image_to_mat(&dyn_image).unwrap();
+    let base_gray_board = dynamic_image_to_gray_mat(&dyn_image).unwrap();
 
-    let coords = get_board_region(&rat);
+    let coords = get_board_region(&base_gray_board);
 
     let cropped = imageops::crop_imm(&raw, coords.0, coords.1, coords.2, coords.3).to_image();
     let dyn_image = DynamicImage::ImageRgba8(cropped.clone());
-    let board = dynamic_image_to_mat(&dyn_image).unwrap();
+    let board = dynamic_image_to_gray_mat(&dyn_image).unwrap();
     let pieces = extract_pieces(&board).unwrap();
+
+    let pieces: Arc<Vec<(char, Arc<Mat>)>> = Arc::new(
+        pieces
+            .into_iter()
+            .map(|(sign, piece)| (sign, Arc::new(piece)))
+            .collect(),
+    );
 
     loop {
         let start = Instant::now();
@@ -150,10 +154,15 @@ fn main() {
         println!("Captured screen in: {:?}", start.elapsed());
         let cropped = imageops::crop_imm(&raw, coords.0, coords.1, coords.2, coords.3).to_image();
         let dyn_image = DynamicImage::ImageRgba8(cropped.clone());
-        let board = dynamic_image_to_mat(&dyn_image).unwrap();
+        let gray_board = dynamic_image_to_gray_mat(&dyn_image).unwrap();
 
-        let mut gray_board = Mat::default();
-        imgproc::cvt_color(&board, &mut gray_board, imgproc::COLOR_BGR2GRAY, 0).unwrap();
+        if images_have_differences(&base_gray_board, &gray_board, 500) {
+            println!("Board changed, processing...");
+        } else {
+            println!("No changes detected, skipping processing.");
+            continue;
+        }
+
         let mut bin_board = Mat::default();
         imgproc::threshold(
             &gray_board,
@@ -163,16 +172,18 @@ fn main() {
             imgproc::THRESH_BINARY,
         )
         .unwrap();
+
         let result = Arc::new(Mutex::new([[' '; 8]; 8]));
         let bin_board = Arc::new(bin_board);
 
         println!("Board processed in: {:?}", start.elapsed());
         let mut handles = vec![];
-        //TODO! temporary
-        for (sign, piece) in pieces.clone() {
+
+        for (sign, piece_arc) in pieces.iter() {
             let board = Arc::clone(&bin_board);
             let result_ref = Arc::clone(&result);
-            let piece = piece.clone();
+            let piece = Arc::clone(piece_arc);
+            let sign = *sign;
 
             let handle = thread::spawn(move || {
                 let local_result = img_proc::single_process(&board, &piece, 0.1, sign).unwrap();
@@ -245,22 +256,14 @@ fn extract_pieces(
         let roi = Rect::new(x, y, w, h);
         let img = Mat::roi(img, roi)?;
 
-        let mut thresholded = Mat::default();
-        imgproc::cvt_color(&img, &mut thresholded, imgproc::COLOR_BGR2GRAY, 0)?;
         let mut bin_board = Mat::default();
-        imgproc::threshold(
-            &thresholded,
-            &mut bin_board,
-            127.0,
-            255.0,
-            imgproc::THRESH_BINARY,
-        )?;
+        imgproc::threshold(&img, &mut bin_board, 127.0, 255.0, imgproc::THRESH_BINARY)?;
         result.insert(name, bin_board);
     }
     Ok(result)
 }
 
-fn dynamic_image_to_mat(img: &DynamicImage) -> opencv::Result<Mat> {
+fn dynamic_image_to_gray_mat(img: &DynamicImage) -> opencv::Result<Mat> {
     let rgba8 = img.to_rgba8();
     let (width, height) = rgba8.dimensions();
 
@@ -271,7 +274,7 @@ fn dynamic_image_to_mat(img: &DynamicImage) -> opencv::Result<Mat> {
     let mat_data = mat.data_bytes_mut().unwrap();
     mat_data.copy_from_slice(&rgba8.as_raw());
 
-    let mut mat_bgra = Mat::default();
-    imgproc::cvt_color(&mat, &mut mat_bgra, imgproc::COLOR_RGBA2BGRA, 0).unwrap();
-    Ok(mat_bgra)
+    let mut gray_mat = Mat::default();
+    imgproc::cvt_color(&mat, &mut gray_mat, imgproc::COLOR_RGBA2GRAY, 0).unwrap();
+    Ok(gray_mat)
 }
