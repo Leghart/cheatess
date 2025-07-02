@@ -5,19 +5,54 @@ use opencv::{
     prelude::*,
     Result,
 };
+use std::io::stdout;
+use std::io::Write;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Instant;
 use xcap::Monitor;
-
 mod engine;
 mod img_proc;
 mod stockfish;
+
+static WHITE_NAMED_FIELDS: [((usize, usize), char); 12] = [
+    ((0, 0), 'r'),
+    ((1, 0), 'n'),
+    ((2, 0), 'b'),
+    ((3, 0), 'q'),
+    ((4, 0), 'k'),
+    ((0, 1), 'p'),
+    ((0, 6), 'P'),
+    ((0, 7), 'R'),
+    ((1, 7), 'N'),
+    ((2, 7), 'B'),
+    ((3, 7), 'Q'),
+    ((4, 7), 'K'),
+];
+
+static BLACK_NAMED_FIELDS: [((usize, usize), char); 12] = [
+    ((0, 0), 'R'),
+    ((1, 0), 'N'),
+    ((2, 0), 'B'),
+    ((3, 0), 'K'),
+    ((4, 0), 'Q'),
+    ((0, 1), 'P'),
+    ((0, 6), 'p'),
+    ((0, 7), 'r'),
+    ((1, 7), 'n'),
+    ((2, 7), 'b'),
+    ((3, 7), 'k'),
+    ((4, 7), 'q'),
+];
 
 #[derive(Debug)]
 enum Color {
     White,
     Black,
+}
+
+fn clear_screen() {
+    print!("\x1B[2J\x1B[H");
 }
 
 fn main() {
@@ -31,7 +66,14 @@ fn main() {
     let cropped = imageops::crop_imm(&raw, coords.0, coords.1, coords.2, coords.3).to_image();
     let dyn_image = DynamicImage::ImageRgba8(cropped.clone());
     let board = dynamic_image_to_gray_mat(&dyn_image).unwrap();
-    let pieces = extract_pieces(&board).unwrap();
+
+    let player_color = detect_player_color(&board);
+    match player_color {
+        Color::White => engine::Board::default_white().print(),
+        Color::Black => engine::Board::default_black().print(),
+    };
+
+    let pieces = extract_pieces(&board, player_color).unwrap();
 
     let pieces: Arc<Vec<(char, Arc<Mat>)>> = Arc::new(
         pieces
@@ -39,8 +81,6 @@ fn main() {
             .map(|(sign, piece)| (sign, Arc::new(piece)))
             .collect(),
     );
-
-    let player_color = detect_player_color(&board);
 
     let mut prev_board = board;
     loop {
@@ -94,8 +134,9 @@ fn main() {
         for handle in handles {
             handle.join().unwrap();
         }
-
+        clear_screen();
         engine::Board::new(*result.lock().unwrap()).print();
+        stdout().flush().unwrap();
     }
 }
 
@@ -298,37 +339,28 @@ fn images_have_differences(gray1: &Mat, gray2: &Mat, threshold: i32) -> bool {
 /// It applies a margin to the extraction area to avoid cutting off pieces.
 fn extract_pieces(
     img: &Mat,
+    player_color: Color,
 ) -> Result<std::collections::HashMap<char, Mat>, Box<dyn std::error::Error>> {
     let board_size = img.rows().min(img.cols());
     let board_size_f = board_size as f32;
 
-    let mut x_edges = vec![];
-    let mut y_edges = vec![];
+    let mut x_edges = [0i32; 9];
+    let mut y_edges = [0i32; 9];
 
     for i in 0..=8 {
-        x_edges.push(((i as f32) * board_size_f / 8.0).round() as i32);
-        y_edges.push(((i as f32) * board_size_f / 8.0).round() as i32);
+        x_edges[i] = ((i as f32) * board_size_f / 8.0).round() as i32;
+        y_edges[i] = ((i as f32) * board_size_f / 8.0).round() as i32;
     }
 
-    let named_fields = vec![
-        ((0, 0), 'r'),
-        ((1, 0), 'n'),
-        ((2, 0), 'b'),
-        ((3, 0), 'q'),
-        ((4, 0), 'k'),
-        ((0, 1), 'p'),
-        ((0, 6), 'P'),
-        ((0, 7), 'R'),
-        ((1, 7), 'N'),
-        ((2, 7), 'B'),
-        ((3, 7), 'Q'),
-        ((4, 7), 'K'),
-    ];
+    let named_fields = match player_color {
+        Color::White => &WHITE_NAMED_FIELDS,
+        Color::Black => &BLACK_NAMED_FIELDS,
+    };
 
     let mut result = std::collections::HashMap::new();
     for ((col, row), name) in named_fields {
-        let x = x_edges[col];
-        let y = y_edges[row];
+        let x = x_edges[*col];
+        let y = y_edges[*row];
         let w = x_edges[col + 1] - x;
         let h = y_edges[row + 1] - y;
 
@@ -344,7 +376,7 @@ fn extract_pieces(
 
         let mut bin_piece = Mat::default();
         imgproc::threshold(&piece, &mut bin_piece, 127.0, 255.0, imgproc::THRESH_BINARY)?;
-        result.insert(name, bin_piece);
+        result.insert(*name, bin_piece);
     }
     Ok(result)
 }
