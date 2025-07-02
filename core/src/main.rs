@@ -19,6 +19,86 @@ use image::Rgba;
 use opencv::Result;
 use xcap::Monitor;
 
+fn main() {
+    let monitor = select_monitor(true).expect("No primary monitor found");
+    let raw = capture_entire_screen(&monitor);
+    let dyn_image = DynamicImage::ImageRgba8(raw.clone());
+    let entire_screen_gray = dynamic_image_to_gray_mat(&dyn_image).unwrap();
+
+    let coords = get_board_region(&entire_screen_gray);
+
+    let cropped = imageops::crop_imm(&raw, coords.0, coords.1, coords.2, coords.3).to_image();
+    let dyn_image = DynamicImage::ImageRgba8(cropped.clone());
+    let board = dynamic_image_to_gray_mat(&dyn_image).unwrap();
+    let pieces = extract_pieces(&board).unwrap();
+
+    let pieces: Arc<Vec<(char, Arc<Mat>)>> = Arc::new(
+        pieces
+            .into_iter()
+            .map(|(sign, piece)| (sign, Arc::new(piece)))
+            .collect(),
+    );
+
+    let mut prev_board = board.clone();
+    loop {
+        let start = Instant::now();
+        let cropped = get_cropped_screen(&monitor, coords.0, coords.1, coords.2, coords.3);
+        let dyn_image = DynamicImage::ImageRgba8(cropped.clone());
+        let gray_board = dynamic_image_to_gray_mat(&dyn_image).unwrap();
+
+        if !images_have_differences(&prev_board, &gray_board, 500) {
+            continue;
+        }
+
+        let mut bin_board = Mat::default();
+        imgproc::threshold(
+            &gray_board,
+            &mut bin_board,
+            127.0,
+            255.0,
+            imgproc::THRESH_BINARY,
+        )
+        .unwrap();
+
+        prev_board = gray_board;
+
+        let result = Arc::new(Mutex::new([[' '; 8]; 8]));
+        let bin_board = Arc::new(bin_board);
+
+        let mut handles = vec![];
+        for (sign, piece_arc) in pieces.iter() {
+            let board = Arc::clone(&bin_board);
+            let result_ref = Arc::clone(&result);
+            let piece = Arc::clone(piece_arc);
+            let sign = *sign;
+
+            let handle = thread::spawn(move || {
+                let local_result = img_proc::single_process(&board, &piece, 0.1, sign).unwrap();
+
+                let mut res = result_ref.lock().unwrap();
+                for row in 0..8 {
+                    for col in 0..8 {
+                        if local_result[row][col] != ' ' && res[row][col] == ' ' {
+                            res[row][col] = local_result[row][col];
+                        }
+                    }
+                }
+            });
+
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        engine::Board::new(*result.lock().unwrap()).print();
+    }
+}
+
+/// Selects a monitor based on whether it is primary or not.
+/// If `primary` is true, it returns the primary monitor.
+/// If `primary` is false, it returns the first non-primary monitor found.
 fn select_monitor(primary: bool) -> Option<Monitor> {
     for m in Monitor::all().unwrap() {
         if primary && m.is_primary().unwrap() {
@@ -30,6 +110,7 @@ fn select_monitor(primary: bool) -> Option<Monitor> {
     None
 }
 
+/// Captures the entire screen of the specified monitor and returns it as an ImageBuffer.
 fn capture_entire_screen(monitor: &Monitor) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
     let capture = monitor.capture_image().unwrap();
 
@@ -37,11 +118,28 @@ fn capture_entire_screen(monitor: &Monitor) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
         .unwrap()
 }
 
-// This function captures the screen and returns the region of the chessboard
-// with the following steps:
-// - Apply Canny edge detection to find the edges
-// - Find contours in the edge-detected image
-// - Approximate the contours to find quadrilaterals
+/// Captures a specific region of the screen defined by the starting coordinates (x_start, y_start)
+/// and the dimensions (width, height).
+fn get_cropped_screen(
+    monitor: &Monitor,
+    x_start: u32,
+    y_start: u32,
+    width: u32,
+    height: u32,
+) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
+    let capture = monitor
+        .capture_region(x_start, y_start, width, height)
+        .unwrap();
+
+    ImageBuffer::<Rgba<u8>, _>::from_raw(capture.width(), capture.height(), capture.into_vec())
+        .unwrap()
+}
+
+/// This function captures the screen and returns the region of the chessboard
+/// with the following steps:
+/// - Apply Canny edge detection to find the edges
+/// - Find contours in the edge-detected image
+/// - Approximate the contours to find quadrilaterals
 fn get_board_region(gray: &Mat) -> (u32, u32, u32, u32) {
     // contours without blurring to keep sharp edges
     let mut edges = Mat::default();
@@ -90,7 +188,9 @@ fn get_board_region(gray: &Mat) -> (u32, u32, u32, u32) {
     (x_start, y_start, width, height)
 }
 
-// default threshold = 500
+/// Checks if two images have differences in their 8x8 grid cells.
+/// It divides the images into 8x8 cells and checks if the number of non-zero
+/// pixels in each cell exceeds a given threshold.
 fn images_have_differences(gray1: &Mat, gray2: &Mat, threshold: i32) -> bool {
     let cell_w = gray1.cols() / 8;
     let cell_h = gray1.rows() / 8;
@@ -139,89 +239,9 @@ fn images_have_differences(gray1: &Mat, gray2: &Mat, threshold: i32) -> bool {
     false
 }
 
-fn main() {
-    let monitor = select_monitor(true).expect("No primary monitor found");
-    let raw = capture_entire_screen(&monitor);
-    let dyn_image = DynamicImage::ImageRgba8(raw.clone());
-    let entire_screen_gray = dynamic_image_to_gray_mat(&dyn_image).unwrap();
-
-    let coords = get_board_region(&entire_screen_gray);
-
-    let cropped = imageops::crop_imm(&raw, coords.0, coords.1, coords.2, coords.3).to_image();
-    let dyn_image = DynamicImage::ImageRgba8(cropped.clone());
-    let board = dynamic_image_to_gray_mat(&dyn_image).unwrap();
-    let pieces = extract_pieces(&board).unwrap();
-
-    let pieces: Arc<Vec<(char, Arc<Mat>)>> = Arc::new(
-        pieces
-            .into_iter()
-            .map(|(sign, piece)| (sign, Arc::new(piece)))
-            .collect(),
-    );
-
-    let mut prev_board = board.clone();
-    loop {
-        let start = Instant::now();
-        let raw = capture_entire_screen(&monitor);
-
-        println!("Captured screen in: {:?}", start.elapsed());
-        let cropped = imageops::crop_imm(&raw, coords.0, coords.1, coords.2, coords.3).to_image();
-        let dyn_image = DynamicImage::ImageRgba8(cropped.clone());
-        let gray_board = dynamic_image_to_gray_mat(&dyn_image).unwrap();
-
-        if !images_have_differences(&prev_board, &gray_board, 500) {
-            continue;
-        }
-
-        let mut bin_board = Mat::default();
-        imgproc::threshold(
-            &gray_board,
-            &mut bin_board,
-            127.0,
-            255.0,
-            imgproc::THRESH_BINARY,
-        )
-        .unwrap();
-
-        prev_board = gray_board;
-
-        let result = Arc::new(Mutex::new([[' '; 8]; 8]));
-        let bin_board = Arc::new(bin_board);
-
-        println!("Board processed in: {:?}", start.elapsed());
-        let mut handles = vec![];
-
-        for (sign, piece_arc) in pieces.iter() {
-            let board = Arc::clone(&bin_board);
-            let result_ref = Arc::clone(&result);
-            let piece = Arc::clone(piece_arc);
-            let sign = *sign;
-
-            let handle = thread::spawn(move || {
-                let local_result = img_proc::single_process(&board, &piece, 0.1, sign).unwrap();
-
-                let mut res = result_ref.lock().unwrap();
-                for row in 0..8 {
-                    for col in 0..8 {
-                        if local_result[row][col] != ' ' && res[row][col] == ' ' {
-                            res[row][col] = local_result[row][col];
-                        }
-                    }
-                }
-            });
-
-            handles.push(handle);
-        }
-
-        for handle in handles {
-            handle.join().unwrap();
-        }
-        println!("All: {:?}", start.elapsed());
-
-        engine::Board::new(*result.lock().unwrap()).print();
-    }
-}
-
+/// Extracts pieces from the chessboard image.
+/// It divides the board into 8x8 cells and extracts the pieces based on predefined positions.
+/// It applies a margin to the extraction area to avoid cutting off pieces.
 fn extract_pieces(
     img: &Mat,
 ) -> Result<std::collections::HashMap<char, Mat>, Box<dyn std::error::Error>> {
@@ -275,6 +295,9 @@ fn extract_pieces(
     Ok(result)
 }
 
+/// Converts a DynamicImage to a grayscale Mat.
+/// It first converts the image to RGBA8 format, then creates a Mat from the pixel data.
+/// Finally, it converts the RGBA Mat to a grayscale Mat using OpenCV's cvt_color function.
 fn dynamic_image_to_gray_mat(img: &DynamicImage) -> opencv::Result<Mat> {
     let rgba8 = img.to_rgba8();
     let (width, height) = rgba8.dimensions();
