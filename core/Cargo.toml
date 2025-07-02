@@ -6,8 +6,8 @@ edition = "2021"
 [dependencies]
 image = "0.24.9"
 opencv = { version = "0.94.2", features = ["clang-runtime"] }
-screenshots = "0.8.10"
 subprocess = "0.2.9"
+xcap = "0.6.1"
 
 [dev-dependencies]
 clippy = "0.0.302"

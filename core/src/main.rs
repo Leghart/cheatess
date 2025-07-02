@@ -14,12 +14,29 @@ use std::thread;
 
 use image::{imageops, DynamicImage};
 
+use image::ImageBuffer;
+use image::Rgba;
 use opencv::Result;
 use screenshots::Screen;
+use xcap::Monitor;
 
-fn select_monitor(screen: usize) -> Option<Screen> {
-    let screens = Screen::all().unwrap();
-    Some(screens[screen]) // TODO!: temporary
+
+fn select_monitor(primary: bool) -> Option<Monitor> {
+    for m in Monitor::all().unwrap() {
+        if primary && m.is_primary().unwrap() {
+            return Some(m);
+        } else if !primary && !m.is_primary().unwrap() {
+            return Some(m);
+        }
+    }
+    None
+}
+
+fn capture_entire_screen(monitor: &Monitor) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
+    let capture = monitor.capture_image().unwrap();
+
+    ImageBuffer::<Rgba<u8>, _>::from_raw(capture.width(), capture.height(), capture.into_vec())
+        .unwrap()
 }
 
 // This function captures the screen and returns the region of the chessboard
@@ -127,9 +144,10 @@ fn images_have_differences(gray1: &Mat, gray2: &Mat, threshold: i32) -> bool {
 }
 
 fn main() {
-    let monitor = select_monitor(0).expect("No primary monitor found");
+    let monitor = select_monitor(true).expect("No primary monitor found");
 
-    let raw = monitor.capture().unwrap();
+    // let raw = monitor.capture().unwrap();
+    let raw = capture_entire_screen(&monitor);
     let dyn_image = DynamicImage::ImageRgba8(raw.clone());
     let base_gray_board = dynamic_image_to_gray_mat(&dyn_image).unwrap();
 
@@ -149,19 +167,19 @@ fn main() {
 
     loop {
         let start = Instant::now();
-        let raw = monitor.capture().unwrap(); // TODO? a bit inefficient, but works
+        let raw = capture_entire_screen(&monitor);
 
         println!("Captured screen in: {:?}", start.elapsed());
         let cropped = imageops::crop_imm(&raw, coords.0, coords.1, coords.2, coords.3).to_image();
         let dyn_image = DynamicImage::ImageRgba8(cropped.clone());
         let gray_board = dynamic_image_to_gray_mat(&dyn_image).unwrap();
 
-        if images_have_differences(&base_gray_board, &gray_board, 500) {
-            println!("Board changed, processing...");
-        } else {
-            println!("No changes detected, skipping processing.");
-            continue;
-        }
+        // if images_have_differences(&base_gray_board, &gray_board, 500) {
+        //     println!("Board changed, processing...");
+        // } else {
+        //     println!("No changes detected, skipping processing.");
+        //     continue;
+        // }
 
         let mut bin_board = Mat::default();
         imgproc::threshold(
