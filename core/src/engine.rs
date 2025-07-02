@@ -63,7 +63,6 @@ impl Board {
 
         println!("+---+---+---+---+---+---+---+---+");
 
-        // for row in self.board.iter() {
         for row in transposed_board.iter() {
             print!("|");
             for col in row.iter() {
