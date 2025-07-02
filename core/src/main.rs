@@ -1,23 +1,24 @@
+use image::{imageops, DynamicImage, ImageBuffer, Rgba};
+use opencv::{
+    core::{Mat, Point, Rect, Scalar, CV_8UC1, CV_8UC4},
+    imgproc,
+    prelude::*,
+    Result,
+};
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Instant;
+use xcap::Monitor;
+
 mod engine;
 mod img_proc;
 mod stockfish;
 
-use std::time::Instant;
-
-use opencv::{
-    core::{Mat, Point, Rect, Scalar, CV_8UC4},
-    imgproc,
-    prelude::*,
-};
-use std::sync::{Arc, Mutex};
-use std::thread;
-
-use image::{imageops, DynamicImage};
-
-use image::ImageBuffer;
-use image::Rgba;
-use opencv::Result;
-use xcap::Monitor;
+#[derive(Debug)]
+enum Color {
+    White,
+    Black,
+}
 
 fn main() {
     let monitor = select_monitor(true).expect("No primary monitor found");
@@ -39,7 +40,9 @@ fn main() {
             .collect(),
     );
 
-    let mut prev_board = board.clone();
+    let player_color = detect_player_color(&board);
+
+    let mut prev_board = board;
     loop {
         let start = Instant::now();
         let cropped = get_cropped_screen(&monitor, coords.0, coords.1, coords.2, coords.3);
@@ -93,6 +96,57 @@ fn main() {
         }
 
         engine::Board::new(*result.lock().unwrap()).print();
+    }
+}
+
+/// Detects the player's color by analyzing the bottom row of the chessboard.
+/// It thresholds the grayscale image to create a binary image,
+/// then checks the ratio of black pixels in the bottom row to determine if the player is playing with white or black pieces.
+fn detect_player_color(gray_board: &Mat) -> Color {
+    let mut bin_board = Mat::default();
+    imgproc::threshold(
+        &gray_board,
+        &mut bin_board,
+        50.0,
+        255.0,
+        imgproc::THRESH_BINARY,
+    )
+    .unwrap();
+
+    let img = bin_board;
+    let width = img.cols();
+    let height = img.rows();
+    let square_width = width / 8;
+    let square_height = height / 8;
+
+    let roi = Rect::new(0, height - square_height, square_width, square_height);
+    let square = Mat::roi(&img, roi).unwrap();
+
+    let mut square_continuous = Mat::new_rows_cols_with_default(
+        square.rows(),
+        square.cols(),
+        CV_8UC1,
+        opencv::core::Scalar::all(0.0),
+    )
+    .unwrap();
+
+    square.copy_to(&mut square_continuous).unwrap();
+
+    let total_pixels = square_continuous.rows() * square_continuous.cols();
+    let black_pixels = square_continuous
+        .data_bytes()
+        .unwrap()
+        .iter()
+        .filter(|&&p| p == 0)
+        .count();
+
+    let black_ratio = black_pixels as f32 / total_pixels as f32;
+
+    // white rook: 0.14, black rook: 0.26
+    if black_ratio > 0.2 {
+        Color::Black
+    } else {
+        Color::White
     }
 }
 
@@ -286,11 +340,11 @@ fn extract_pieces(
         let h = (h - 2 * margin).max(1);
 
         let roi = Rect::new(x, y, w, h);
-        let img = Mat::roi(img, roi)?;
+        let piece = Mat::roi(img, roi)?;
 
-        let mut bin_board = Mat::default();
-        imgproc::threshold(&img, &mut bin_board, 127.0, 255.0, imgproc::THRESH_BINARY)?;
-        result.insert(name, bin_board);
+        let mut bin_piece = Mat::default();
+        imgproc::threshold(&piece, &mut bin_piece, 127.0, 255.0, imgproc::THRESH_BINARY)?;
+        result.insert(name, bin_piece);
     }
     Ok(result)
 }
