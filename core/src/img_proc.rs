@@ -7,6 +7,7 @@ use opencv::{
     prelude::*,
 };
 
+#[allow(dead_code)]
 pub fn show(image: &Mat, destroy: bool) -> Result<(), Box<dyn std::error::Error>> {
     highgui::imshow("test_window", &image)?;
     loop {
