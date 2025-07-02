@@ -17,9 +17,7 @@ use image::{imageops, DynamicImage};
 use image::ImageBuffer;
 use image::Rgba;
 use opencv::Result;
-use screenshots::Screen;
 use xcap::Monitor;
-
 
 fn select_monitor(primary: bool) -> Option<Monitor> {
     for m in Monitor::all().unwrap() {
@@ -96,8 +94,7 @@ fn get_board_region(gray: &Mat) -> (u32, u32, u32, u32) {
 fn images_have_differences(gray1: &Mat, gray2: &Mat, threshold: i32) -> bool {
     let cell_w = gray1.cols() / 8;
     let cell_h = gray1.rows() / 8;
-    // TODO!: to fix
-    println!("Cell size: {}x{}", cell_w, cell_h); // Debugging output
+
     for row in 0..8 {
         for col in 0..8 {
             let x = col * cell_w;
@@ -107,7 +104,6 @@ fn images_have_differences(gray1: &Mat, gray2: &Mat, threshold: i32) -> bool {
             let height = if row == 7 { gray1.rows() - y } else { cell_h };
 
             let roi = Rect::new(x, y, width, height);
-            println!("ROI: {:?}", roi); // Debugging output
             let patch1 = Mat::roi(gray1, roi).unwrap();
             let patch2 = Mat::roi(gray2, roi).unwrap();
 
@@ -145,13 +141,11 @@ fn images_have_differences(gray1: &Mat, gray2: &Mat, threshold: i32) -> bool {
 
 fn main() {
     let monitor = select_monitor(true).expect("No primary monitor found");
-
-    // let raw = monitor.capture().unwrap();
     let raw = capture_entire_screen(&monitor);
     let dyn_image = DynamicImage::ImageRgba8(raw.clone());
-    let base_gray_board = dynamic_image_to_gray_mat(&dyn_image).unwrap();
+    let entire_screen_gray = dynamic_image_to_gray_mat(&dyn_image).unwrap();
 
-    let coords = get_board_region(&base_gray_board);
+    let coords = get_board_region(&entire_screen_gray);
 
     let cropped = imageops::crop_imm(&raw, coords.0, coords.1, coords.2, coords.3).to_image();
     let dyn_image = DynamicImage::ImageRgba8(cropped.clone());
@@ -165,6 +159,7 @@ fn main() {
             .collect(),
     );
 
+    let mut prev_board = board.clone();
     loop {
         let start = Instant::now();
         let raw = capture_entire_screen(&monitor);
@@ -174,12 +169,9 @@ fn main() {
         let dyn_image = DynamicImage::ImageRgba8(cropped.clone());
         let gray_board = dynamic_image_to_gray_mat(&dyn_image).unwrap();
 
-        // if images_have_differences(&base_gray_board, &gray_board, 500) {
-        //     println!("Board changed, processing...");
-        // } else {
-        //     println!("No changes detected, skipping processing.");
-        //     continue;
-        // }
+        if !images_have_differences(&prev_board, &gray_board, 500) {
+            continue;
+        }
 
         let mut bin_board = Mat::default();
         imgproc::threshold(
@@ -190,6 +182,8 @@ fn main() {
             imgproc::THRESH_BINARY,
         )
         .unwrap();
+
+        prev_board = gray_board;
 
         let result = Arc::new(Mutex::new([[' '; 8]; 8]));
         let bin_board = Arc::new(bin_board);
