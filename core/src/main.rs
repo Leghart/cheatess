@@ -51,11 +51,19 @@ enum Color {
     Black,
 }
 
+fn main() {
+    run();
+}
+
 fn clear_screen() {
     print!("\x1B[2J\x1B[H");
 }
 
-fn main() {
+fn run() {
+    let mut st =
+        stockfish::Stockfish::new("/home/leghart/projects/cheatess/stockfish-ubuntu-x86-64-avx2");
+    st.set_elo_rating(2200);
+
     let monitor = select_monitor(true).expect("No primary monitor found");
     let raw = capture_entire_screen(&monitor);
     let dyn_image = DynamicImage::ImageRgba8(raw.clone());
@@ -68,10 +76,11 @@ fn main() {
     let board = dynamic_image_to_gray_mat(&dyn_image).unwrap();
 
     let player_color = detect_player_color(&board);
-    match player_color {
-        Color::White => engine::Board::default_white().print(),
-        Color::Black => engine::Board::default_black().print(),
+    let base_board = match player_color {
+        Color::White => engine::Board::default_white(),
+        Color::Black => engine::Board::default_black(),
     };
+    base_board.print();
 
     let pieces = extract_pieces(&board, player_color).unwrap();
 
@@ -82,14 +91,15 @@ fn main() {
             .collect(),
     );
 
-    let mut prev_board = board;
+    let mut prev_board_mat = board;
+    let mut prev_board_arr = base_board;
     loop {
         let start = Instant::now();
         let cropped = get_cropped_screen(&monitor, coords.0, coords.1, coords.2, coords.3);
-        let dyn_image = DynamicImage::ImageRgba8(cropped.clone());
+        let dyn_image = DynamicImage::ImageRgba8(cropped);
         let gray_board = dynamic_image_to_gray_mat(&dyn_image).unwrap();
 
-        if !images_have_differences(&prev_board, &gray_board, 500) {
+        if !images_have_differences(&prev_board_mat, &gray_board, 500) {
             continue;
         }
 
@@ -102,8 +112,6 @@ fn main() {
             imgproc::THRESH_BINARY,
         )
         .unwrap();
-
-        prev_board = gray_board;
 
         let result = Arc::new(Mutex::new([[' '; 8]; 8]));
         let bin_board = Arc::new(bin_board);
@@ -134,9 +142,25 @@ fn main() {
         for handle in handles {
             handle.join().unwrap();
         }
+        let new_data = *result.lock().unwrap();
+        let detected_move = engine::detect_move(&prev_board_arr.board, &new_data).unwrap();
+
+        if let Some(mv) = detected_move {
+            println!("Detected move: {:?}", mv);
+            st.make_move(vec![mv]);
+        } else {
+            println!("not found move");
+        }
+
         clear_screen();
-        engine::Board::new(*result.lock().unwrap()).print();
+        let curr_board = engine::Board::new(new_data);
+        curr_board.print();
+        let best_move = st.get_best_move().unwrap();
+        println!("Stockfish best move: {}", best_move);
         stdout().flush().unwrap();
+
+        prev_board_arr = curr_board;
+        prev_board_mat = gray_board;
     }
 }
 

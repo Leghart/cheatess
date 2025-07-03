@@ -112,11 +112,13 @@ pub fn register_piece(
 // TODO: add validations
 // TODO: add color handling (now only for whites)
 fn coords_to_position(row: usize, col: usize) -> Result<String, Box<dyn std::error::Error>> {
-    let file = (b'a' + col as u8) as char;
-    let rank = (8 - row).to_string();
+    let file = (b'a' + row as u8) as char;
+    let rank = (8 - col).to_string();
+
     Ok(format!("{}{}", file, rank))
 }
 
+// TODO!: [bug] after take another piece, it returns None
 pub fn detect_move(
     before: &[[char; 8]; 8],
     after: &[[char; 8]; 8],
@@ -144,6 +146,7 @@ pub fn detect_move(
             coords_to_position(to_row, to_col)?
         )))
     } else {
+        println!("{:?} {:?}", from, to);
         Ok(None)
     }
 }

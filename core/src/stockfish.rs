@@ -63,7 +63,7 @@ impl Stockfish {
             ("UCI_Elo".to_string(), "1350".to_string()),
         ]);
 
-        _self.update_params(default_params);
+        // _self.update_params(default_params);
 
         _self
     }
