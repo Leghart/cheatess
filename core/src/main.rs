@@ -45,12 +45,6 @@ static BLACK_NAMED_FIELDS: [((usize, usize), char); 12] = [
     ((4, 7), 'q'),
 ];
 
-#[derive(Debug)]
-enum Color {
-    White,
-    Black,
-}
-
 fn main() {
     run();
 }
@@ -76,10 +70,8 @@ fn run() {
     let board = dynamic_image_to_gray_mat(&dyn_image).unwrap();
 
     let player_color = detect_player_color(&board);
-    let base_board = match player_color {
-        Color::White => engine::Board::default_white(),
-        Color::Black => engine::Board::default_black(),
-    };
+
+    let base_board = engine::create_board::<engine::PrettyPrinter>(&player_color);
     base_board.print();
 
     let pieces = extract_pieces(&board, player_color).unwrap();
@@ -143,7 +135,7 @@ fn run() {
             handle.join().unwrap();
         }
         let new_data = *result.lock().unwrap();
-        let detected_move = engine::detect_move(&prev_board_arr.board, &new_data).unwrap();
+        let detected_move = engine::detect_move(&prev_board_arr.board, &new_data);
 
         if let Some(mv) = detected_move {
             println!("Detected move: {:?}", mv);
@@ -168,7 +160,7 @@ fn run() {
 /// Detects the player's color by analyzing the bottom row of the chessboard.
 /// It thresholds the grayscale image to create a binary image,
 /// then checks the ratio of black pixels in the bottom row to determine if the player is playing with white or black pieces.
-fn detect_player_color(gray_board: &Mat) -> Color {
+fn detect_player_color(gray_board: &Mat) -> engine::Color {
     let mut bin_board = Mat::default();
     imgproc::threshold(
         &gray_board,
@@ -210,9 +202,9 @@ fn detect_player_color(gray_board: &Mat) -> Color {
 
     // white rook: 0.14, black rook: 0.26
     if black_ratio > 0.2 {
-        Color::Black
+        engine::Color::Black
     } else {
-        Color::White
+        engine::Color::White
     }
 }
 
@@ -364,7 +356,7 @@ fn images_have_differences(gray1: &Mat, gray2: &Mat, threshold: i32) -> bool {
 /// It applies a margin to the extraction area to avoid cutting off pieces.
 fn extract_pieces(
     img: &Mat,
-    player_color: Color,
+    player_color: engine::Color,
 ) -> Result<std::collections::HashMap<char, Mat>, Box<dyn std::error::Error>> {
     let board_size: i32 = img.rows().min(img.cols());
     let board_size_f = board_size as f32;
@@ -378,8 +370,8 @@ fn extract_pieces(
     }
 
     let named_fields = match player_color {
-        Color::White => &WHITE_NAMED_FIELDS,
-        Color::Black => &BLACK_NAMED_FIELDS,
+        engine::Color::White => &WHITE_NAMED_FIELDS,
+        engine::Color::Black => &BLACK_NAMED_FIELDS,
     };
 
     let mut result = std::collections::HashMap::new();

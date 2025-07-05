@@ -69,7 +69,7 @@ pub fn single_process(
         let top_left = min_loc;
 
         register_piece(
-            (top_left.x, top_left.y),
+            (top_left.y, top_left.x), // Note: OpenCV uses (y, x) for coordinates
             (board_size.width, board_size.height),
             symbol,
             &mut result,
