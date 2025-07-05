@@ -1,7 +1,8 @@
 // Logic based on board operations with arrays representaitons.
 // Contains functions which calculate position in board, detect last move,
 // transform data to stockfish format etc.
-// TODO: every func & test is for white view
+// TODO!: handle castle + notation for stockfish
+use std::io::Write;
 
 static PIECE_TABLE: [&'static str; 128] = {
     let mut table = [""; 128];
@@ -53,21 +54,21 @@ impl Printer for PrettyPrinter {
 }
 
 pub struct Board<P: Printer> {
-    pub board: [[char; 8]; 8],
+    pub raw: [[char; 8]; 8],
     printer: std::marker::PhantomData<P>,
 }
 
 impl<P: Printer> Board<P> {
     pub fn new(data: [[char; 8]; 8]) -> Self {
         Board {
-            board: data,
+            raw: data,
             printer: std::marker::PhantomData,
         }
     }
 
     pub const fn default_white() -> Self {
         Board {
-            board: [
+            raw: [
                 ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
                 ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
                 [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
@@ -83,7 +84,7 @@ impl<P: Printer> Board<P> {
 
     pub const fn default_black() -> Self {
         Board {
-            board: [
+            raw: [
                 ['R', 'N', 'B', 'K', 'Q', 'B', 'N', 'R'],
                 ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
                 [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
@@ -97,25 +98,26 @@ impl<P: Printer> Board<P> {
         }
     }
 
-    pub fn print(&self) {
+    pub fn print<W: Write>(&self, writer: &mut W) {
         let transposed_board: Vec<Vec<_>> = (0..8)
-            .map(|row| (0..8).map(|col| self.board[row][col]).collect())
+            .map(|row| (0..8).map(|col| self.raw[row][col]).collect())
             .collect();
 
-        println!("+---+---+---+---+---+---+---+---+");
+        writeln!(writer, "+---+---+---+---+---+---+---+---+").unwrap();
 
         for row in transposed_board.iter() {
-            print!("|");
+            write!(writer, "|").unwrap();
             for col in row.iter() {
-                print!(" {} |", P::print_piece(*col));
+                write!(writer, " {} |", P::print_piece(*col)).unwrap();
             }
-            println!();
-            println!("+---+---+---+---+---+---+---+---+");
+            writeln!(writer).unwrap();
+            writeln!(writer, "+---+---+---+---+---+---+---+---+").unwrap();
         }
+        writer.flush().unwrap();
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Color {
     White,
     Black,
@@ -147,13 +149,23 @@ pub fn register_piece(
 
 // Change (x,y) coordiantes to string position representation.
 // TODO: add color handling (now only for whites)
-fn coords_to_position(row: usize, col: usize) -> String {
-    let file = (b'a' + col as u8) as char;
-    let rank = (8 - row).to_string();
-    format!("{}{}", file, rank)
+fn coords_to_position(row: usize, col: usize, player_color: &Color) -> String {
+    if player_color == &Color::White {
+        let file = (b'a' + col as u8) as char;
+        let rank = (8 - row).to_string();
+        format!("{}{}", file, rank)
+    } else {
+        let file = (b'h' - col as u8) as char;
+        let rank = (row + 1).to_string();
+        format!("{}{}", file, rank)
+    }
 }
 
-pub fn detect_move(before: &[[char; 8]; 8], after: &[[char; 8]; 8]) -> Option<String> {
+pub fn detect_move(
+    before: &[[char; 8]; 8],
+    after: &[[char; 8]; 8],
+    player_color: &Color,
+) -> Option<String> {
     let mut from: Option<(usize, usize)> = None;
     let mut to: Option<(usize, usize)> = None;
 
@@ -171,7 +183,7 @@ pub fn detect_move(before: &[[char; 8]; 8], after: &[[char; 8]; 8]) -> Option<St
                     to = Some((row, col));
                 }
 
-                // piece was captured by another one.
+                // Piece was captured by another one.
                 if before[row][col] != ' ' && after[row][col] != ' ' {
                     to = Some((row, col));
                 }
@@ -182,8 +194,8 @@ pub fn detect_move(before: &[[char; 8]; 8], after: &[[char; 8]; 8]) -> Option<St
     if let (Some((from_row, from_col)), Some((to_row, to_col))) = (from, to) {
         Some(format!(
             "{}{}",
-            coords_to_position(from_row, from_col),
-            coords_to_position(to_row, to_col)
+            coords_to_position(from_row, from_col, &player_color),
+            coords_to_position(to_row, to_col, &player_color)
         ))
     } else {
         None
@@ -196,28 +208,34 @@ mod tests {
     use rstest::{fixture, rstest};
 
     #[fixture]
-    fn init_board() -> [[char; 8]; 8] {
-        [
-            ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
-            ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
-            [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
-            [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
-            [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
-            [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
-            ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
-            ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R'],
-        ]
-    }
-
-    #[fixture]
     fn empty_board() -> [[char; 8]; 8] {
         [[' '; 8]; 8]
     }
 
     #[rstest]
-    fn default_white_as_init_board(init_board: [[char; 8]; 8]) {
-        let board = Board::<DefaultPrinter>::default_white();
-        assert_eq!(board.board, init_board);
+    #[case(Color::White,[
+                ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
+                ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+                [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+                [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+                [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+                [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+                ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
+                ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R']
+            ])]
+    #[case(Color::Black,            [
+                ['R', 'N', 'B', 'K', 'Q', 'B', 'N', 'R'],
+                ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
+                [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+                [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+                [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+                [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+                ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+                ['r', 'n', 'b', 'k', 'q', 'b', 'n', 'r']
+            ])]
+    fn check_create_board(#[case] player_color: Color, #[case] result: [[char; 8]; 8]) {
+        let board = create_board::<DefaultPrinter>(&player_color);
+        assert_eq!(board.raw, result);
     }
 
     #[rstest]
@@ -238,18 +256,25 @@ mod tests {
     }
 
     #[rstest]
-    #[case(0,0,"a8".to_string())]
-    #[case(0, 7,"h8".to_string())]
-    #[case(7, 0,"a1".to_string())]
-    #[case(7, 7,"h1".to_string())]
-    #[case(4, 4,"e4".to_string())]
-    #[case(3, 6,"g5".to_string())]
+    #[case(0,0,"a8".to_string(), Color::White)]
+    #[case(0, 7,"h8".to_string(), Color::White)]
+    #[case(7, 0,"a1".to_string(), Color::White)]
+    #[case(7, 7,"h1".to_string(), Color::White)]
+    #[case(4, 4,"e4".to_string(), Color::White)]
+    #[case(3, 6,"g5".to_string(), Color::White)]
+    #[case(0,0,"h1".to_string(), Color::Black)]
+    #[case(0, 7,"a1".to_string(), Color::Black)]
+    #[case(7, 0,"h8".to_string(), Color::Black)]
+    #[case(7, 7,"a8".to_string(), Color::Black)]
+    #[case(4, 4,"d5".to_string(), Color::Black)]
+    #[case(3, 6,"b4".to_string(), Color::Black)]
     fn correct_change_coords_to_position(
         #[case] row: usize,
         #[case] col: usize,
         #[case] pos: String,
+        #[case] player_color: Color,
     ) {
-        let result = coords_to_position(row, col);
+        let result = coords_to_position(row, col, &player_color);
 
         assert_eq!(result, pos);
     }
@@ -264,7 +289,7 @@ mod tests {
         [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
         ['P', 'P', 'P', 'P', ' ', 'P', 'P', 'P'],
         ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R'],
-    ],"e2e4".to_string())]
+    ],"e2e4".to_string(),Color::White, Board::<DefaultPrinter>::default_white())]
     #[case([
         ['r', ' ', 'b', 'q', 'k', 'b', 'n', 'r'],
         ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
@@ -274,13 +299,24 @@ mod tests {
         [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
         ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
         ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R'],
-    ],"b8c6".to_string())]
+    ],"b8c6".to_string(),Color::White, Board::<DefaultPrinter>::default_white())]
+    #[case([
+        ['R', 'N', 'B', 'K', 'Q', 'B', 'N', 'R'],
+        ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', 'n', ' ', ' ', ' ', ' ', ' '],
+        ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+        ['r', ' ', 'b', 'k', 'q', 'b', 'n', 'r'],
+    ],"g8f6".to_string(),Color::Black,Board::<DefaultPrinter>::default_black())]
     fn detect_simple_move(
         #[case] after_move: [[char; 8]; 8],
         #[case] _move: String,
-        init_board: [[char; 8]; 8],
+        #[case] player_color: Color,
+        #[case] init_board: Board<DefaultPrinter>,
     ) {
-        let result = detect_move(&init_board, &after_move);
+        let result = detect_move(&init_board.raw, &after_move, &player_color);
 
         assert!(result.is_some());
         assert_eq!(result.unwrap(), _move);
@@ -305,34 +341,93 @@ mod tests {
         [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
         ['P', ' ', 'P', ' ', ' ', 'P', ' ', 'P'],
         ['R', 'N', ' ', 'Q', 'K', 'B', 'N', 'R'],
-    ],"h7h5".to_string())]
+    ],"h7h5".to_string(), Color::White)]
     #[case([
-        ['r', ' ', 'b', 'q', 'k', 'b', 'n', 'r'],
-        ['p', 'P', ' ', ' ', 'p', 'p', 'p', 'p'],
+        ['R', 'N', 'B', 'K', 'Q', 'B', 'N', 'R'],
+        ['P', 'P', 'P', 'P', 'P', ' ', 'P', 'P'],
         [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
-        [' ', ' ', ' ', ' ', ' ', ' ', 'N', ' '],
-        [' ', ' ', 'p', 'q', 'P', ' ', ' ', ' '],
+        [' ', 'q', ' ', 'P', ' ', 'p', ' ', ' '],
         [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
-        ['P', ' ', 'P', ' ', ' ', 'P', ' ', 'P'],
-        ['R', 'N', ' ', 'Q', 'K', 'B', 'N', 'R'],
+        [' ', ' ', ' ', ' ', 'P', ' ', ' ', ' '],
+        ['p', ' ', 'p', 'p', 'p', 'p', 'p', 'p'],
+        ['r', 'n', 'b', ' ', 'q', 'k', ' ', ' ']
     ],[
-        ['r', 'Q', 'b', 'q', 'k', 'b', 'n', 'r'],
-        ['p', ' ', ' ', ' ', 'p', 'p', 'p', 'p'],
+        ['R', 'N', 'B', 'K', 'Q', 'B', 'N', 'R'],
+        ['P', 'P', 'P', 'P', 'P', ' ', 'P', 'P'],
+        [' ', ' ', ' ', ' ', ' ', 'p', ' ', ' '],
+        [' ', 'q', ' ', 'P', ' ', ' ', ' ', ' '],
         [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
-        [' ', ' ', ' ', ' ', ' ', ' ', 'N', ' '],
-        [' ', ' ', 'p', 'q', 'P', ' ', ' ', ' '],
-        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
-        ['P', ' ', 'P', ' ', ' ', 'P', ' ', 'P'],
-        ['R', 'N', ' ', 'Q', 'K', 'B', 'N', 'R'],
-    ],"b7b8".to_string())]
+        [' ', ' ', ' ', ' ', 'P', ' ', ' ', ' '],
+        ['p', ' ', 'p', 'p', 'p', 'p', 'p', 'p'],
+        ['r', 'n', 'b', ' ', 'q', 'k', ' ', ' ']
+    ],"c4c3".to_string(),Color::Black)]
     fn detect_complex_move(
         #[case] before_move: [[char; 8]; 8],
         #[case] after_move: [[char; 8]; 8],
         #[case] _move: String,
+        #[case] player_color: Color,
     ) {
-        let result = detect_move(&before_move, &after_move);
+        let result = detect_move(&before_move, &after_move, &player_color);
 
         assert!(result.is_some());
         assert_eq!(result.unwrap(), _move);
+    }
+
+    #[rstest]
+    fn show_board_with_pieces() {
+        let mut buf = Vec::new();
+        let board = Board::<PrettyPrinter>::default_white();
+        board.print(&mut buf);
+
+        let output = String::from_utf8(buf).unwrap();
+
+        let predicted = "+---+---+---+---+---+---+---+---+
+| ♜ | ♞ | ♝ | ♛ | ♚ | ♝ | ♞ | ♜ |
++---+---+---+---+---+---+---+---+
+| ♟ | ♟ | ♟ | ♟ | ♟ | ♟ | ♟ | ♟ |
++---+---+---+---+---+---+---+---+
+|   |   |   |   |   |   |   |   |
++---+---+---+---+---+---+---+---+
+|   |   |   |   |   |   |   |   |
++---+---+---+---+---+---+---+---+
+|   |   |   |   |   |   |   |   |
++---+---+---+---+---+---+---+---+
+|   |   |   |   |   |   |   |   |
++---+---+---+---+---+---+---+---+
+| ♙ | ♙ | ♙ | ♙ | ♙ | ♙ | ♙ | ♙ |
++---+---+---+---+---+---+---+---+
+| ♖ | ♘ | ♗ | ♕ | ♔ | ♗ | ♘ | ♖ |
++---+---+---+---+---+---+---+---+\n"
+            .to_string();
+        assert_eq!(output, predicted);
+    }
+
+    #[rstest]
+    fn show_board_with_letters() {
+        let mut buf = Vec::new();
+        let board = Board::<DefaultPrinter>::default_white();
+        board.print(&mut buf);
+
+        let output = String::from_utf8(buf).unwrap();
+
+        let predicted = "+---+---+---+---+---+---+---+---+
+| r | n | b | q | k | b | n | r |
++---+---+---+---+---+---+---+---+
+| p | p | p | p | p | p | p | p |
++---+---+---+---+---+---+---+---+
+|   |   |   |   |   |   |   |   |
++---+---+---+---+---+---+---+---+
+|   |   |   |   |   |   |   |   |
++---+---+---+---+---+---+---+---+
+|   |   |   |   |   |   |   |   |
++---+---+---+---+---+---+---+---+
+|   |   |   |   |   |   |   |   |
++---+---+---+---+---+---+---+---+
+| P | P | P | P | P | P | P | P |
++---+---+---+---+---+---+---+---+
+| R | N | B | Q | K | B | N | R |
++---+---+---+---+---+---+---+---+\n"
+            .to_string();
+        assert_eq!(output, predicted);
     }
 }

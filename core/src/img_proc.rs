@@ -43,6 +43,11 @@ pub fn single_process(
         &empty_mask,
     )?;
 
+    // TODO: for lichess
+    // if symbol == 'P' {
+    //     threshold = 0.05;
+    // }
+
     let mut min_val = 0.0;
     let mut max_val = 0.0;
     let mut min_loc = Point::default();
@@ -100,3 +105,49 @@ pub fn single_process(
 
     Ok(result)
 }
+
+// #[cfg(test)]
+// mod tests {
+//     use crate::img_proc;
+
+//     use super::*;
+
+//     #[test]
+//     fn single_process_detection() {
+//         let board_image = opencv::imgcodecs::imread(
+//             "templates/boards/binary/init.png",
+//             opencv::imgcodecs::IMREAD_UNCHANGED,
+//         )
+//         .unwrap();
+//         let mut bin_board = Mat::default();
+//         imgproc::threshold(
+//             &board_image,
+//             &mut bin_board,
+//             127.0,
+//             255.0,
+//             imgproc::THRESH_BINARY,
+//         )
+//         .unwrap();
+
+//         let piece_image = opencv::imgcodecs::imread(
+//             "templates/pieces/binary/P.png",
+//             opencv::imgcodecs::IMREAD_UNCHANGED,
+//         )
+//         .unwrap();
+//         let mut bin_piece = Mat::default();
+//         imgproc::threshold(
+//             &piece_image,
+//             &mut bin_piece,
+//             127.0,
+//             255.0,
+//             imgproc::THRESH_BINARY,
+//         )
+//         .unwrap();
+
+//         // img_proc::show(&bin_piece, true);
+//         // img_proc::show(&bin_board, true);
+
+//         let result = single_process(&bin_board, &bin_piece, 0.1, 'P').unwrap();
+//         assert_eq!(result[6], ['P'; 8]);
+//     }
+// }

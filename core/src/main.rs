@@ -5,12 +5,12 @@ use opencv::{
     prelude::*,
     Result,
 };
-use std::io::stdout;
-use std::io::Write;
+use std::io::{self};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Instant;
 use xcap::Monitor;
+
 mod engine;
 mod img_proc;
 mod stockfish;
@@ -54,6 +54,7 @@ fn clear_screen() {
 }
 
 fn run() {
+    let mut stdout = io::stdout();
     let mut st =
         stockfish::Stockfish::new("/home/leghart/projects/cheatess/stockfish-ubuntu-x86-64-avx2");
     st.set_elo_rating(2800);
@@ -72,9 +73,9 @@ fn run() {
     let player_color = detect_player_color(&board);
 
     let base_board = engine::create_board::<engine::PrettyPrinter>(&player_color);
-    base_board.print();
+    base_board.print(&mut stdout);
 
-    let pieces = extract_pieces(&board, player_color).unwrap();
+    let pieces = extract_pieces(&board, &player_color).unwrap();
 
     let pieces: Arc<Vec<(char, Arc<Mat>)>> = Arc::new(
         pieces
@@ -99,7 +100,7 @@ fn run() {
         imgproc::threshold(
             &gray_board,
             &mut bin_board,
-            127.0,
+            100.0, //TODO: downgraded from 127 to lichess
             255.0,
             imgproc::THRESH_BINARY,
         )
@@ -135,7 +136,8 @@ fn run() {
             handle.join().unwrap();
         }
         let new_data = *result.lock().unwrap();
-        let detected_move = engine::detect_move(&prev_board_arr.board, &new_data);
+        println!("New data: {:?}", new_data);
+        let detected_move = engine::detect_move(&prev_board_arr.raw, &new_data, &player_color);
 
         if let Some(mv) = detected_move {
             println!("Detected move: {:?}", mv);
@@ -146,10 +148,9 @@ fn run() {
 
         clear_screen();
         let curr_board = engine::Board::new(new_data);
-        curr_board.print();
+        curr_board.print(&mut stdout);
         let best_move = st.get_best_move().unwrap();
         println!("Stockfish best move: {}", best_move);
-        stdout().flush().unwrap();
 
         prev_board_arr = curr_board;
         prev_board_mat = gray_board;
@@ -356,7 +357,7 @@ fn images_have_differences(gray1: &Mat, gray2: &Mat, threshold: i32) -> bool {
 /// It applies a margin to the extraction area to avoid cutting off pieces.
 fn extract_pieces(
     img: &Mat,
-    player_color: engine::Color,
+    player_color: &engine::Color,
 ) -> Result<std::collections::HashMap<char, Mat>, Box<dyn std::error::Error>> {
     let board_size: i32 = img.rows().min(img.cols());
     let board_size_f = board_size as f32;
