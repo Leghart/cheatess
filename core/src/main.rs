@@ -62,7 +62,7 @@ fn clear_screen() {
 fn run() {
     let mut st =
         stockfish::Stockfish::new("/home/leghart/projects/cheatess/stockfish-ubuntu-x86-64-avx2");
-    st.set_elo_rating(2200);
+    st.set_elo_rating(2800);
 
     let monitor = select_monitor(true).expect("No primary monitor found");
     let raw = capture_entire_screen(&monitor);
@@ -161,6 +161,7 @@ fn run() {
 
         prev_board_arr = curr_board;
         prev_board_mat = gray_board;
+        println!("Time taken: {:?}", start.elapsed());
     }
 }
 
@@ -365,7 +366,7 @@ fn extract_pieces(
     img: &Mat,
     player_color: Color,
 ) -> Result<std::collections::HashMap<char, Mat>, Box<dyn std::error::Error>> {
-    let board_size = img.rows().min(img.cols());
+    let board_size: i32 = img.rows().min(img.cols());
     let board_size_f = board_size as f32;
 
     let mut x_edges = [0i32; 9];

@@ -44,37 +44,57 @@ impl Board {
 
     pub const fn default_white() -> Self {
         Board {
+            // board: [
+            //     ['r', 'p', ' ', ' ', ' ', ' ', 'P', 'R'],
+            //     ['n', 'p', ' ', ' ', ' ', ' ', 'P', 'N'],
+            //     ['b', 'p', ' ', ' ', ' ', ' ', 'P', 'B'],
+            //     ['q', 'p', ' ', ' ', ' ', ' ', 'P', 'Q'],
+            //     ['k', 'p', ' ', ' ', ' ', ' ', 'P', 'K'],
+            //     ['b', 'p', ' ', ' ', ' ', ' ', 'P', 'B'],
+            //     ['n', 'p', ' ', ' ', ' ', ' ', 'P', 'N'],
+            //     ['r', 'p', ' ', ' ', ' ', ' ', 'P', 'R'],
+            // ],
             board: [
-                ['r', 'p', ' ', ' ', ' ', ' ', 'P', 'R'],
-                ['n', 'p', ' ', ' ', ' ', ' ', 'P', 'N'],
-                ['b', 'p', ' ', ' ', ' ', ' ', 'P', 'B'],
-                ['q', 'p', ' ', ' ', ' ', ' ', 'P', 'Q'],
-                ['k', 'p', ' ', ' ', ' ', ' ', 'P', 'K'],
-                ['b', 'p', ' ', ' ', ' ', ' ', 'P', 'B'],
-                ['n', 'p', ' ', ' ', ' ', ' ', 'P', 'N'],
-                ['r', 'p', ' ', ' ', ' ', ' ', 'P', 'R'],
+                ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
+                ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+                [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+                [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+                [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+                [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+                ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
+                ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R'],
             ],
         }
     }
 
     pub const fn default_black() -> Self {
         Board {
+            // board: [
+            //     ['R', 'P', ' ', ' ', ' ', ' ', 'p', 'r'],
+            //     ['N', 'P', ' ', ' ', ' ', ' ', 'p', 'n'],
+            //     ['B', 'P', ' ', ' ', ' ', ' ', 'p', 'b'],
+            //     ['K', 'P', ' ', ' ', ' ', ' ', 'p', 'k'],
+            //     ['Q', 'P', ' ', ' ', ' ', ' ', 'p', 'q'],
+            //     ['B', 'P', ' ', ' ', ' ', ' ', 'p', 'b'],
+            //     ['N', 'P', ' ', ' ', ' ', ' ', 'p', 'n'],
+            //     ['R', 'P', ' ', ' ', ' ', ' ', 'p', 'r'],
+            // ],
             board: [
-                ['R', 'P', ' ', ' ', ' ', ' ', 'p', 'r'],
-                ['N', 'P', ' ', ' ', ' ', ' ', 'p', 'n'],
-                ['B', 'P', ' ', ' ', ' ', ' ', 'p', 'b'],
-                ['K', 'P', ' ', ' ', ' ', ' ', 'p', 'k'],
-                ['Q', 'P', ' ', ' ', ' ', ' ', 'p', 'q'],
-                ['B', 'P', ' ', ' ', ' ', ' ', 'p', 'b'],
-                ['N', 'P', ' ', ' ', ' ', ' ', 'p', 'n'],
-                ['R', 'P', ' ', ' ', ' ', ' ', 'p', 'r'],
+                ['R', 'N', 'B', 'K', 'Q', 'B', 'N', 'R'],
+                ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
+                [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+                [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+                [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+                [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+                ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+                ['r', 'n', 'b', 'k', 'q', 'b', 'n', 'r'],
             ],
         }
     }
 
     pub fn print(&self) {
         let transposed_board: Vec<Vec<_>> = (0..8)
-            .map(|col| (0..8).map(|row| self.board[row][col]).collect())
+            .map(|row| (0..8).map(|col| self.board[row][col]).collect())
             .collect();
 
         println!("+---+---+---+---+---+---+---+---+");
@@ -82,7 +102,8 @@ impl Board {
         for row in transposed_board.iter() {
             print!("|");
             for col in row.iter() {
-                print!(" {} |", get_piece(*col).unwrap_or(" "));
+                // print!(" {} |", get_piece(*col).unwrap_or(" "));
+                print!(" {} |", *col);
             }
             println!();
             println!("+---+---+---+---+---+---+---+---+");
@@ -101,8 +122,8 @@ pub fn register_piece(
     let tile_width = board_size.0 / 8;
     let tile_height = board_size.1 / 8;
 
-    let row = (point.0 / tile_height).clamp(0, 7) as usize;
-    let col = (point.1 / tile_width).clamp(0, 7) as usize;
+    let col = (point.0 / tile_height).clamp(0, 7) as usize;
+    let row = (point.1 / tile_width).clamp(0, 7) as usize;
 
     board[row][col] = piece;
     Ok(())
@@ -112,9 +133,8 @@ pub fn register_piece(
 // TODO: add validations
 // TODO: add color handling (now only for whites)
 fn coords_to_position(row: usize, col: usize) -> Result<String, Box<dyn std::error::Error>> {
-    let file = (b'a' + row as u8) as char;
-    let rank = (8 - col).to_string();
-
+    let file = (b'a' + col as u8) as char;
+    let rank = (8 - row).to_string();
     Ok(format!("{}{}", file, rank))
 }
 
@@ -129,10 +149,18 @@ pub fn detect_move(
     for row in 0..8 {
         for col in 0..8 {
             if before[row][col] != after[row][col] {
+                // Previously piece was at (row, col) in `before` and now this place
+                // is empty.
                 if before[row][col] != ' ' && after[row][col] == ' ' {
                     from = Some((row, col));
                 }
+                // Piece moved from empty place to a new one.
                 if before[row][col] == ' ' && after[row][col] != ' ' {
+                    to = Some((row, col));
+                }
+
+                // piece was captured by another one.
+                if before[row][col] != ' ' && after[row][col] != ' ' {
                     to = Some((row, col));
                 }
             }
@@ -146,7 +174,6 @@ pub fn detect_move(
             coords_to_position(to_row, to_col)?
         )))
     } else {
-        println!("{:?} {:?}", from, to);
         Ok(None)
     }
 }
