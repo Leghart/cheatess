@@ -19,6 +19,7 @@ fn run() {
         stockfish::Stockfish::new("/home/leghart/projects/cheatess/stockfish-ubuntu-x86-64-avx2");
     st.set_elo_rating(2800);
 
+    return ();
     let monitor = monitor::select_monitor(true).expect("No primary monitor found");
     let raw = monitor::capture_entire_screen(&monitor);
     let dyn_image = DynamicImage::ImageRgba8(raw.clone());
@@ -29,12 +30,6 @@ fn run() {
     let cropped = imageops::crop_imm(&raw, coords.0, coords.1, coords.2, coords.3).to_image();
     let dyn_image = DynamicImage::ImageRgba8(cropped);
     let board = procimg::dynamic_image_to_gray_mat(&dyn_image).unwrap();
-    opencv::imgcodecs::imwrite(
-        "templates/boards/original/gray_cropped.png",
-        &board,
-        &opencv::core::Vector::default(),
-    );
-    panic!();
 
     let player_color = procimg::detect_player_color(&board);
 

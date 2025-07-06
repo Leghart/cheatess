@@ -414,13 +414,11 @@ pub fn dynamic_image_to_gray_mat(img: &DynamicImage) -> opencv::Result<Mat> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use image::imageops;
+    use image::{imageops, DynamicImage};
+    use opencv::{imgcodecs, imgproc};
 
     #[test]
     fn get_board_region_from_entire_screenshot() {
-        use image::{imageops, DynamicImage};
-        use opencv::{imgcodecs, imgproc, prelude::*};
-
         let raw = imgcodecs::imread(
             "templates/boards/original/entire_board.png",
             imgcodecs::IMREAD_UNCHANGED,
