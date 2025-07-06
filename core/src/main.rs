@@ -17,9 +17,9 @@ fn run() {
     let mut stdout = io::stdout();
     let mut st =
         stockfish::Stockfish::new("/home/leghart/projects/cheatess/stockfish-ubuntu-x86-64-avx2");
-
+    st.set_config();
     st.set_elo_rating(2800);
-
+    println!("=====");
     return ();
 
     let monitor = monitor::select_monitor(true).expect("No primary monitor found");
