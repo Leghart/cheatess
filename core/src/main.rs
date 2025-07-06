@@ -19,6 +19,7 @@ fn run() {
         stockfish::Stockfish::new("/home/leghart/projects/cheatess/stockfish-ubuntu-x86-64-avx2");
     st.set_config();
     st.set_elo_rating(2800);
+    println!("{:?}", st.get_evaluation());
     println!("=====");
     return ();
 

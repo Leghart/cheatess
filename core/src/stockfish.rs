@@ -134,7 +134,7 @@ impl Stockfish {
             ("Move Overhead", "10"),
             ("UCI_Chess960", "false"),
             ("UCI_LimitStrength", "false"),
-            ("UCI_Elo", "1350"),
+            ("UCI_Elo", "1700"),
         ]);
 
         self.update_params(default_params);
@@ -146,6 +146,7 @@ impl Stockfish {
     }
 
     // TODO: to fix
+    // TODO: add tests
     pub fn get_evaluation(&mut self) -> HashMap<String, String> {
         let mut evaluation: HashMap<String, String> = HashMap::new();
         let fen_position = self.get_fen_position();
@@ -180,6 +181,7 @@ impl Stockfish {
         ]));
     }
 
+    // TODO: add tests
     pub fn set_elo_rating(&mut self, rating: usize) {
         self.update_params(HashMap::from_iter([
             ("UCI_LimitStrength", "true"),
@@ -187,12 +189,12 @@ impl Stockfish {
         ]));
     }
 
-    // TODO?: add wtime & btime
     pub fn get_best_move(&mut self) -> Option<String> {
         self._go();
         self.get_move_from_proc()
     }
 
+    // TODO: add tests
     pub fn make_move(&mut self, moves: Vec<String>) {
         if moves.len() == 0 {
             return;
@@ -208,18 +210,7 @@ impl Stockfish {
         }
     }
 
-    pub fn get_fen_position(&mut self) -> String {
-        self._put("d");
-
-        for line in self.proc.lines() {
-            let trimmed = line.trim();
-            if trimmed.contains("Fen: ") {
-                return trimmed[5..].to_string();
-            }
-        }
-        panic!()
-    }
-
+    // TODO: add tests
     fn update_params(&mut self, new_param_values_p: HashMap<&str, &str>) {
         let mut new_param_values = new_param_values_p;
 
@@ -263,6 +254,18 @@ impl Stockfish {
 
         let pos = self.get_fen_position();
         self.set_fen_position(&pos, false);
+    }
+
+    fn get_fen_position(&mut self) -> String {
+        self._put("d");
+
+        for line in self.proc.lines() {
+            let trimmed = line.trim();
+            if trimmed.contains("Fen: ") {
+                return trimmed[5..].to_string();
+            }
+        }
+        panic!()
     }
 
     fn set_fen_position(&mut self, fen: &str, token: bool) {
@@ -582,5 +585,89 @@ mod tests {
         sf._put("quit");
 
         assert!(sf.quit_sent);
+    }
+
+    #[test]
+    fn go_depth_send_correct_msg() {
+        let mock = MockProcess::new();
+
+        let mut sf = Stockfish {
+            proc: Box::new(mock),
+            parameters: HashMap::new(),
+            depth: 5,
+            info: "".to_string(),
+            quit_sent: false,
+            version: "".to_string(),
+        };
+
+        sf._go();
+
+        let proc = sf.proc.as_any().downcast_ref::<MockProcess>().unwrap();
+        assert!(proc.written_lines.contains(&"go depth 5".to_string()));
+    }
+
+    #[test]
+    fn prepare_for_new_with_token() {
+        let mut mock = MockProcess::new();
+        mock.push_read_line("readyok");
+
+        let mut sf = Stockfish {
+            proc: Box::new(mock),
+            parameters: HashMap::new(),
+            depth: 1,
+            info: "Old info".to_string(),
+            quit_sent: false,
+            version: "".to_string(),
+        };
+
+        sf.prepare_for_new_position(true);
+
+        let proc = sf.proc.as_any().downcast_ref::<MockProcess>().unwrap();
+        assert!(proc.written_lines.contains(&"ucinewgame".to_string()));
+        assert_eq!(sf.info, String::new());
+    }
+
+    #[test]
+    fn prepare_for_new_without_start_new_game() {
+        let mut mock = MockProcess::new();
+        mock.push_read_line("readyok");
+
+        let mut sf = Stockfish {
+            proc: Box::new(mock),
+            parameters: HashMap::new(),
+            depth: 1,
+            info: "Old info".to_string(),
+            quit_sent: false,
+            version: "".to_string(),
+        };
+
+        sf.prepare_for_new_position(false);
+
+        let proc = sf.proc.as_any().downcast_ref::<MockProcess>().unwrap();
+        assert!(!proc.written_lines.contains(&"ucinewgame".to_string()));
+        assert_eq!(sf.info, String::new());
+    }
+
+    #[test]
+    fn set_fen_position_with_token() {
+        let mut mock = MockProcess::new();
+        mock.push_read_line("readyok");
+
+        let mut sf = Stockfish {
+            proc: Box::new(mock),
+            parameters: HashMap::new(),
+            depth: 1,
+            info: "Old info".to_string(),
+            quit_sent: false,
+            version: "".to_string(),
+        };
+
+        sf.set_fen_position("abc/abc/", true);
+
+        let proc = sf.proc.as_any().downcast_ref::<MockProcess>().unwrap();
+        assert!(proc.written_lines.contains(&"ucinewgame".to_string()));
+        assert!(proc
+            .written_lines
+            .contains(&"position fen abc/abc/".to_string()));
     }
 }
