@@ -17,9 +17,11 @@ fn run() {
     let mut stdout = io::stdout();
     let mut st =
         stockfish::Stockfish::new("/home/leghart/projects/cheatess/stockfish-ubuntu-x86-64-avx2");
+
     st.set_elo_rating(2800);
 
     return ();
+
     let monitor = monitor::select_monitor(true).expect("No primary monitor found");
     let raw = monitor::capture_entire_screen(&monitor);
     let dyn_image = DynamicImage::ImageRgba8(raw.clone());

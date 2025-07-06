@@ -14,14 +14,13 @@ use subprocess::{Popen, PopenConfig, Redirection};
 /// ```
 pub struct Stockfish {
     proc: Popen,
-    parameters: HashMap<String, String>,
+    pub parameters: HashMap<String, String>,
     depth: u8,
     info: String,
     quit_sent: bool,
-    version: String,
+    pub version: String,
 }
 
-#[allow(dead_code)]
 impl Stockfish {
     pub fn new(exec_path: &str) -> Self {
         let proc = Popen::create(
@@ -34,7 +33,7 @@ impl Stockfish {
                 ..Default::default()
             },
         )
-        .expect("error");
+        .expect("Creating detached stockfish process failed!");
 
         let mut _self = Stockfish {
             proc,
@@ -46,30 +45,25 @@ impl Stockfish {
         };
 
         _self.version = _self.read_line();
-        _self.put("uci");
+        _self._put("uci");
         let _ = _self.read_line(); // clear buffer
 
-        let default_params: HashMap<String, String> = HashMap::from_iter([
-            ("Debug Log File".to_string(), "".to_string()),
-            ("Threads".to_string(), "1".to_string()),
-            ("Ponder".to_string(), "false".to_string()),
-            ("Hash".to_string(), "16".to_string()),
-            ("MultiPV".to_string(), "1".to_string()),
-            ("Skill Level".to_string(), "20".to_string()),
-            ("Move Overhead".to_string(), "10".to_string()),
-            ("Slow Mover".to_string(), "100".to_string()),
-            ("UCI_Chess960".to_string(), "false".to_string()),
-            ("UCI_LimitStrength".to_string(), "false".to_string()),
-            ("UCI_Elo".to_string(), "1350".to_string()),
+        let default_params: HashMap<&str, &str> = HashMap::from_iter([
+            ("Debug Log File", ""),
+            // ("Threads", "1"),
+            ("Ponder", "false"),
+            ("Hash", "16"),
+            ("MultiPV", "1"),
+            ("Skill Level", "20"),
+            ("Move Overhead", "10"),
+            ("UCI_Chess960", "false"),
+            ("UCI_LimitStrength", "false"),
+            ("UCI_Elo", "1350"),
         ]);
 
-        // _self.update_params(default_params);
+        _self.update_params(default_params);
 
         _self
-    }
-
-    pub fn get_version(&self) -> &str {
-        &self.version
     }
 
     //TODO:
@@ -85,8 +79,8 @@ impl Stockfish {
             true => 1,
             false => -1,
         };
-        self.put(&format!("position {fen_position}"));
-        self.go();
+        self._put(&format!("position {fen_position}"));
+        self._go();
 
         loop {
             let raw = self.read_line();
@@ -105,29 +99,24 @@ impl Stockfish {
         }
     }
 
-    pub fn get_parameters(&self) -> &HashMap<String, String> {
-        &self.parameters
-    }
-
     pub fn set_skill_level(&mut self, level: usize) {
         self.update_params(HashMap::from_iter([
-            ("UCI_LimitStrength".to_string(), "false".to_string()),
-            ("Skill level".to_string(), level.to_string()),
+            ("UCI_LimitStrength", "false"),
+            ("Skill level", &level.to_string()),
         ]));
     }
 
     pub fn set_elo_rating(&mut self, rating: usize) {
         self.update_params(HashMap::from_iter([
-            ("UCI_LimitStrength".to_string(), "true".to_string()),
-            ("UCI_Elo".to_string(), rating.to_string()),
+            ("UCI_LimitStrength", "true"),
+            ("UCI_Elo", &rating.to_string()),
         ]));
     }
 
     // TODO?: add wtime & btime
     pub fn get_best_move(&mut self) -> Option<String> {
-        self.go();
-        let best_move = self.get_move_from_proc();
-        best_move
+        self._go();
+        self.get_move_from_proc()
     }
 
     pub fn make_move(&mut self, moves: Vec<String>) {
@@ -141,13 +130,13 @@ impl Stockfish {
                 panic!("TODO");
             }
             let pos = self.get_fen_position();
-            self.put(&format!("position fen {pos} moves {_move}"));
+            self._put(&format!("position fen {pos} moves {_move}"));
         }
     }
 
     // TODO: terrible (think how to solve blocking bufread)
     pub fn get_fen_position(&mut self) -> String {
-        self.put("d");
+        self._put("d");
         if let Some(stdout) = self.proc.stdout.as_mut() {
             let reader = BufReader::new(stdout);
 
@@ -170,13 +159,14 @@ impl Stockfish {
         }
     }
 
-    fn put(&mut self, cmd: &str) {
+    fn _put(&mut self, cmd: &str) {
         if self.proc.stdin.is_none() {
             panic!("TODO");
         }
         if self.proc.poll().is_none() && !self.quit_sent {
             if let Some(stdin) = &mut self.proc.stdin {
-                writeln!(stdin, "{}", cmd).unwrap();
+                // println!("{}", format!("send cmd: {cmd}"));
+                writeln!(stdin, "{cmd}").unwrap();
                 stdin.flush().unwrap();
             }
 
@@ -186,12 +176,12 @@ impl Stockfish {
         }
     }
 
-    fn update_params(&mut self, new_param_values_p: HashMap<String, String>) {
+    fn update_params(&mut self, new_param_values_p: HashMap<&str, &str>) {
         let mut new_param_values = new_param_values_p;
 
         if !self.parameters.is_empty() {
             for key in new_param_values.keys() {
-                if !self.parameters.contains_key(key) {
+                if !self.parameters.contains_key(*key) {
                     panic!("TODO"); //TODO!
                 }
             }
@@ -202,20 +192,20 @@ impl Stockfish {
             && !new_param_values.contains_key("UCI_LimitStrength")
         {
             if new_param_values.contains_key("Skill Level") {
-                new_param_values.insert("UCI_LimitStrength".to_string(), "false".to_string());
+                new_param_values.insert("UCI_LimitStrength", "false");
             } else if new_param_values.contains_key("UCI_Elo") {
-                new_param_values.insert("UCI_LimitStrength".to_string(), "true".to_string());
+                new_param_values.insert("UCI_LimitStrength", "true");
             }
         }
 
         if let Some(threads_value) = new_param_values.remove("Threads") {
-            let hash_value = new_param_values
-                .remove("Hash")
-                .or_else(|| self.parameters.get("Hash").cloned());
+            // TODO!: check
+            let hash_value = new_param_values.remove("Hash");
+            // .or_else(|| self.parameters.get("Hash").map(|x| x.as_str()));
 
-            new_param_values.insert("Threads".to_string(), threads_value);
+            new_param_values.insert("Threads", threads_value);
             if let Some(hash_value) = hash_value {
-                new_param_values.insert("Hash".to_string(), hash_value);
+                new_param_values.insert("Hash", hash_value);
             }
         }
 
@@ -229,20 +219,19 @@ impl Stockfish {
 
     fn set_fen_position(&mut self, fen: &str, token: bool) {
         self.prepare_for_new_position(token);
-        self.put(&format!("position fen {fen}"));
+        self._put(&format!("position fen {fen}"));
     }
 
     fn prepare_for_new_position(&mut self, send_token: bool) {
         if send_token {
-            self.put("ucinewgame");
+            self._put("ucinewgame");
         }
         self.is_ready();
         self.info = String::new();
     }
 
     fn set_option(&mut self, name: &str, value: &str, update_attr: bool) {
-        self.put(&format!("setoption name {name} value {value}"));
-
+        self._put(&format!("setoption name {name} value {value}"));
         if update_attr {
             self.parameters
                 .entry(name.to_string())
@@ -253,16 +242,19 @@ impl Stockfish {
     }
 
     fn is_ready(&mut self) {
-        self.put("isready");
-        let out = self.read_line();
-        while out != "readyok" {
-            continue;
+        self._put("isready");
+
+        loop {
+            let _out = self.read_line();
+            if _out == "readyok" {
+                break;
+            }
         }
     }
 
     fn is_correct_move(&mut self, _move: &str) -> bool {
         let old_info = self.info.clone();
-        self.put(&format!("go depth 1 searchmoves {_move}"));
+        self._put(&format!("go depth 1 searchmoves {_move}"));
         let result = self.get_move_from_proc().is_some();
         self.info = old_info;
         return result;
@@ -284,12 +276,12 @@ impl Stockfish {
         }
     }
 
-    fn go(&mut self) {
-        self.put(&format!("go depth {}", self.depth));
+    fn _go(&mut self) {
+        self._put(&format!("go depth {}", self.depth));
     }
 
     fn go_time(&mut self, time: usize) {
-        self.put(&format!("go movetime {time}"));
+        self._put(&format!("go movetime {time}"));
     }
 
     // TODO: terrbile
@@ -323,6 +315,6 @@ impl Stockfish {
 
 impl Drop for Stockfish {
     fn drop(&mut self) {
-        self.put("quit");
+        self._put("quit");
     }
 }
