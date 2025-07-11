@@ -67,7 +67,7 @@ pub fn find_all_pieces(
     imgproc::threshold(
         &gray_board,
         &mut bin_board,
-        100.0, //TODO: downgraded from 127 to lichess
+        100.0,
         255.0,
         imgproc::THRESH_BINARY,
     )
@@ -127,11 +127,6 @@ fn single_process(
         imgproc::TM_SQDIFF_NORMED,
         &empty_mask,
     )?;
-
-    // TODO: for lichess
-    // if symbol == 'P' {
-    //     threshold = 0.05;
-    // }
 
     let mut min_val = 0.0;
     let mut max_val = 0.0;
