@@ -18,10 +18,7 @@ fn run() {
     let mut st =
         stockfish::Stockfish::new("/home/leghart/projects/cheatess/stockfish-ubuntu-x86-64-avx2");
     st.set_config();
-    st.set_elo_rating(2800);
-    println!("{:?}", st.get_evaluation());
-    println!("=====");
-    return ();
+    st.set_elo_rating(2000);
 
     let monitor = monitor::select_monitor(true).expect("No primary monitor found");
     let raw = monitor::capture_entire_screen(&monitor);
@@ -47,6 +44,11 @@ fn run() {
 
     let mut prev_board_mat = board;
     let mut prev_board_arr = base_board;
+    let best_move = st.get_best_move().unwrap();
+    println!("Stockfish best move: {}", best_move);
+
+    println!("---->{:?}", st.get_evaluation());
+
     loop {
         let start = Instant::now();
         let cropped = monitor::get_cropped_screen(&monitor, coords.0, coords.1, coords.2, coords.3);
@@ -73,6 +75,7 @@ fn run() {
         curr_board.print(&mut stdout);
         let best_move = st.get_best_move().unwrap();
         println!("Stockfish best move: {}", best_move);
+        println!("---->{:?}", st.get_evaluation());
 
         prev_board_arr = curr_board;
         prev_board_mat = gray_board;

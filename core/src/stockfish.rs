@@ -5,8 +5,8 @@ use subprocess::{Popen, PopenConfig, Redirection};
 pub trait Process {
     fn write_line(&mut self, msg: &str);
     fn read_line(&mut self) -> String;
-    fn is_running(&mut self) -> bool;
     fn lines<'a>(&'a mut self) -> Box<dyn Iterator<Item = String> + 'a>;
+    fn is_running(&mut self) -> bool;
     #[allow(dead_code)]
     fn as_any(&self) -> &dyn std::any::Any;
 }
@@ -45,7 +45,6 @@ impl Process for RealProcess {
 
         if self.proc.poll().is_none() {
             if let Some(stdin) = &mut self.proc.stdin {
-                println!("sent {msg}");
                 writeln!(stdin, "{}", msg).expect("Failed to write to stdin");
                 stdin.flush().expect("Failed to flush stdin");
             }
@@ -66,6 +65,10 @@ impl Process for RealProcess {
         }
     }
 
+    fn is_running(&mut self) -> bool {
+        self.proc.poll().is_none()
+    }
+
     fn lines<'a>(&'a mut self) -> Box<dyn Iterator<Item = String> + 'a> {
         if let Some(stdout) = &mut self.proc.stdout {
             let reader = BufReader::new(stdout);
@@ -73,10 +76,6 @@ impl Process for RealProcess {
         } else {
             Box::new(std::iter::empty())
         }
-    }
-
-    fn is_running(&mut self) -> bool {
-        self.proc.poll().is_none()
     }
 }
 
@@ -100,6 +99,7 @@ pub struct Stockfish {
     pub version: String,
 }
 
+#[allow(dead_code)]
 impl Stockfish {
     pub fn new(exec_path: &str) -> Self {
         let real_proc = RealProcess::new(exec_path);
@@ -117,7 +117,7 @@ impl Stockfish {
         };
 
         _self.version = _self.read_line();
-        _self._put("uci"); // start engine
+        _self._put("uci");
         let _ = _self.read_line(); // clear buffer
 
         _self
@@ -150,6 +150,7 @@ impl Stockfish {
     pub fn get_evaluation(&mut self) -> HashMap<String, String> {
         let mut evaluation: HashMap<String, String> = HashMap::new();
         let fen_position = self.get_fen_position();
+        println!("FEN: {fen_position}");
         let compare = match fen_position.contains('w') {
             true => 1,
             false => -1,
@@ -159,15 +160,25 @@ impl Stockfish {
 
         loop {
             let raw = self.read_line();
+            println!("{raw}");
             let text: Vec<&str> = raw.split(" ").collect();
+            // println!("DEPTH: {:?}", self.depth);
             if text[0] == "info" {
-                for n in 0..text.len() - 1 {
-                    if text[n] == "score" {
-                        *evaluation.get_mut("type").unwrap() = text[n + 1].to_string();
-                        *evaluation.get_mut("value").unwrap() =
-                            (text[n + 2].parse::<isize>().unwrap() * compare).to_string();
-                    }
+                if text[2] != format!("{}", self.depth) {
+                    continue;
                 }
+                println!("=== {:?}", text);
+                // *evaluation.get_mut("type").unwrap() = text[9].to_string();
+                evaluation.insert("cp".to_string(), text[9].to_string());
+                return evaluation;
+                // for n in 0..text.len() - 1 {
+                //     if text[n] == "score" {
+                //         *evaluation.get_mut("type").unwrap() = text[n + 1].to_string();
+                //         // *evaluation.get_mut("value").unwrap() =
+                //         //     (text[n + 2].parse::<isize>().unwrap() * compare).to_string();
+                //         // return evaluation;
+                //     }
+                // }
             } else if text[0] == "bestmove" {
                 return evaluation;
             }
@@ -181,7 +192,6 @@ impl Stockfish {
         ]));
     }
 
-    // TODO: add tests
     pub fn set_elo_rating(&mut self, rating: usize) {
         self.update_params(HashMap::from_iter([
             ("UCI_LimitStrength", "true"),
@@ -194,23 +204,26 @@ impl Stockfish {
         self.get_move_from_proc()
     }
 
-    // TODO: add tests
     pub fn make_move(&mut self, moves: Vec<String>) {
         if moves.len() == 0 {
             return;
         }
 
         self.prepare_for_new_position(false);
+
         for _move in moves {
             if !self.is_correct_move(&_move) {
-                panic!("TODO");
+                let msg = format!(
+                    "Move '{_move}' is not a valid move for current position or engine state."
+                );
+                panic!("{msg}");
             }
+
             let pos = self.get_fen_position();
             self._put(&format!("position fen {pos} moves {_move}"));
         }
     }
 
-    // TODO: add tests
     fn update_params(&mut self, new_param_values_p: HashMap<&str, &str>) {
         let mut new_param_values = new_param_values_p;
 
@@ -234,7 +247,6 @@ impl Stockfish {
         }
 
         if let Some(threads_value) = new_param_values.remove("Threads") {
-            // TODO!: check
             let hash_value = new_param_values.remove("Hash");
 
             new_param_values.insert("Threads", threads_value);
@@ -284,9 +296,7 @@ impl Stockfish {
     fn get_move_from_proc(&mut self) -> Option<String> {
         let mut last_text = String::new();
 
-        loop {
-            let text = self.proc.read_line();
-
+        for text in self.proc.lines() {
             let splitted: Vec<&str> = text.split_whitespace().collect();
             if splitted.is_empty() {
                 continue;
@@ -305,6 +315,7 @@ impl Stockfish {
 
             last_text = text;
         }
+        None
     }
 
     fn go_time(&mut self, time: usize) {
@@ -395,7 +406,7 @@ mod tests {
         }
 
         fn read_line(&mut self) -> String {
-            self.lines_to_read.pop_front().unwrap_or_default()
+            self.lines_to_read.pop_front().unwrap()
         }
 
         fn is_running(&mut self) -> bool {
@@ -403,7 +414,12 @@ mod tests {
         }
 
         fn lines<'a>(&'a mut self) -> Box<dyn Iterator<Item = String> + 'a> {
-            let iter = self.lines_to_read.drain(..).collect::<Vec<_>>().into_iter();
+            let iter = self
+                .lines_to_read
+                .iter()
+                .cloned() // to avoid situation when buffer filled with future msgs is consumed
+                .collect::<Vec<_>>()
+                .into_iter();
             Box::new(iter)
         }
     }
@@ -419,11 +435,6 @@ mod tests {
 
         let proc = sf.proc.as_any().downcast_ref::<MockProcess>().unwrap();
         assert!(proc.written_lines.contains(&"uci".to_string()));
-    }
-
-    #[test]
-    fn set_config() {
-        panic!("TODO");
     }
 
     #[test]
@@ -669,5 +680,124 @@ mod tests {
         assert!(proc
             .written_lines
             .contains(&"position fen abc/abc/".to_string()));
+    }
+
+    #[test]
+    fn set_elo_rating_updates_parameters() {
+        let mut mock = MockProcess::new();
+        mock.push_read_line("Stockfish 17 by Mock");
+        mock.push_read_line("readyok");
+
+        mock.push_read_line("readyok"); // UCI_LimitStrength
+        mock.push_read_line("readyok"); // UCI_Elo
+
+        mock.push_read_line("Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+        mock.push_read_line("readyok");
+
+        let mut sf = Stockfish::new_with_process(Box::new(mock));
+        sf.set_elo_rating(2000);
+
+        let proc = sf.proc.as_any().downcast_ref::<MockProcess>().unwrap();
+        assert!(proc
+            .written_lines
+            .contains(&"setoption name UCI_LimitStrength value true".to_string()));
+        assert!(proc
+            .written_lines
+            .contains(&"setoption name UCI_Elo value 2000".to_string()));
+        assert_eq!(
+            sf.parameters.get("UCI_LimitStrength"),
+            Some(&"true".to_string())
+        );
+        assert_eq!(sf.parameters.get("UCI_Elo"), Some(&"2000".to_string()));
+    }
+
+    #[test]
+    fn update_params_sends_correct_commands() {
+        let mut mock = MockProcess::new();
+        mock.push_read_line("Stockfish 17 by Mock");
+        mock.push_read_line("readyok");
+
+        mock.push_read_line("readyok"); // MyParam
+        mock.push_read_line("readyok"); // Threads
+        mock.push_read_line("readyok"); // Hash
+
+        mock.push_read_line("Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+        mock.push_read_line("readyok");
+
+        let mut sf = Stockfish::new_with_process(Box::new(mock));
+        let mut params = HashMap::new();
+        params.insert("MyParam", "Value1");
+        params.insert("Threads", "4");
+        params.insert("Hash", "256");
+
+        sf.update_params(params);
+
+        let proc = sf.proc.as_any().downcast_ref::<MockProcess>().unwrap();
+        assert!(proc
+            .written_lines
+            .contains(&"setoption name MyParam value Value1".to_string()));
+        assert!(proc
+            .written_lines
+            .contains(&"setoption name Threads value 4".to_string()));
+        assert!(proc
+            .written_lines
+            .contains(&"setoption name Hash value 256".to_string()));
+
+        assert_eq!(sf.parameters.get("MyParam"), Some(&"Value1".to_string()));
+        assert_eq!(sf.parameters.get("Threads"), Some(&"4".to_string()));
+        assert_eq!(sf.parameters.get("Hash"), Some(&"256".to_string()));
+    }
+
+    #[test]
+    fn make_move_sends_correct_commands() {
+        let mut mock = MockProcess::new();
+        mock.push_read_line("Stockfish 17 by Mock");
+        mock.push_read_line("readyok");
+
+        mock.push_read_line("readyok");
+
+        mock.push_read_line("Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+        mock.push_read_line("readyok");
+
+        mock.push_read_line("bestmove d2d1");
+
+        mock.push_read_line("info depth 1 bestmove e2e4");
+        mock.push_read_line("readyok");
+        mock.push_read_line("Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+        mock.push_read_line("readyok");
+
+        let mut sf = Stockfish::new_with_process(Box::new(mock));
+        sf.make_move(vec!["e2e4".to_string()]);
+
+        let proc = sf.proc.as_any().downcast_ref::<MockProcess>().unwrap();
+        assert!(proc.written_lines.contains(
+            &"position fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 moves e2e4"
+                .to_string()
+        ));
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Move 'd1d1' is not a valid move for current position or engine state."
+    )]
+    fn make_move_panics_on_invalid_move() {
+        let mut mock = MockProcess::new();
+        mock.push_read_line("Stockfish 17 by Mock");
+        mock.push_read_line("readyok");
+
+        mock.push_read_line("readyok");
+
+        mock.push_read_line("Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+        mock.push_read_line("readyok");
+
+        mock.push_read_line("bestmove (none)");
+
+        mock.push_read_line("info depth 1 bestmove (none)");
+        mock.push_read_line("readyok");
+        mock.push_read_line("Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+        mock.push_read_line("readyok");
+
+        let mut sf = Stockfish::new_with_process(Box::new(mock));
+        sf.make_move(vec!["d1d1".to_string()]);
     }
 }
