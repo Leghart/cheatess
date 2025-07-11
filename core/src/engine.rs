@@ -124,6 +124,7 @@ pub enum Color {
 }
 
 pub fn create_board<P: Printer>(player_color: &Color) -> Board<P> {
+    print!("aa");
     match player_color {
         Color::White => Board::<P>::default_white(),
         Color::Black => Board::<P>::default_black(),
