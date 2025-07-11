@@ -35,7 +35,7 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libopencv-dev libwayland-dev pkg-config libpipewire-0.3-dev libegl-dev
+        run: sudo apt-get update && sudo apt-get install -y libopencv-dev libwayland-dev pkg-config libpipewire-0.3-dev libegl-dev libgbm-dev
 
       - name: Install toolchain
         uses: actions-rs/toolchain@v1

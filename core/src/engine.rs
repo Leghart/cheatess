@@ -154,11 +154,11 @@ fn coords_to_position(row: usize, col: usize, player_color: &Color) -> String {
     if player_color == &Color::White {
         let file = (b'a' + col as u8) as char;
         let rank = (8 - row).to_string();
-        format!("{}{}", file, rank)
+        format!("{file}{rank}")
     } else {
         let file = (b'h' - col as u8) as char;
         let rank = (row + 1).to_string();
-        format!("{}{}", file, rank)
+        format!("{file}{rank}")
     }
 }
 
