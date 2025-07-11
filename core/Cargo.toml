@@ -4,11 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-image = "0.24.9"
-opencv = { version = "0.94.2", features = ["clang-runtime"] }
-subprocess = "0.2.9"
-xcap = "0.6.1"
+image = { version = "0.25", default-features = false }
+opencv = { version = "0.94.2", default-features = false, features = ["clang-runtime", "imgproc", "highgui"] }
+subprocess = { version = "0.2.9", default-features = false }
+xcap = { version = "0.6.1", default-features = false }
 
 [dev-dependencies]
-clippy = "0.0.302"
 rstest = "0.24.0"
+opencv = { version = "0.94.2", default-features = false, features = ["imgcodecs"] }
+
