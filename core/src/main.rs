@@ -76,6 +76,7 @@ fn run() {
         let best_move = st.get_best_move().unwrap();
         println!("Stockfish best move: {}", best_move);
         println!("---->{:?}", st.get_evaluation());
+        println!("====>{:?}", st.get_wdl_stats());
 
         prev_board_arr = curr_board;
         prev_board_mat = gray_board;

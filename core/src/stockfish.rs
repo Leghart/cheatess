@@ -135,54 +135,99 @@ impl Stockfish {
             ("UCI_Chess960", "false"),
             ("UCI_LimitStrength", "false"),
             ("UCI_Elo", "1700"),
+            ("UCI_ShowWDL", "true"),
         ]);
 
         self.update_params(default_params);
     }
 
-    //TODO:
-    pub fn get_wdl_stats(&self) -> Option<Vec<String>> {
-        Some(Vec::new())
-    }
-
-    // TODO: to fix
-    // TODO: add tests
-    pub fn get_evaluation(&mut self) -> HashMap<String, String> {
-        let mut evaluation: HashMap<String, String> = HashMap::new();
+    //TODO: fix for single player
+    //TODO: add tests
+    pub fn get_wdl_stats(&mut self) -> [usize; 3] {
         let fen_position = self.get_fen_position();
-        println!("FEN: {fen_position}");
-        let compare = match fen_position.contains('w') {
-            true => 1,
-            false => -1,
-        };
         self._put(&format!("position {fen_position}"));
         self._go();
 
-        loop {
-            let raw = self.read_line();
-            println!("{raw}");
-            let text: Vec<&str> = raw.split(" ").collect();
-            // println!("DEPTH: {:?}", self.depth);
-            if text[0] == "info" {
-                if text[2] != format!("{}", self.depth) {
-                    continue;
+        let mut result = [0; 3];
+        for line in self.proc.lines() {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.is_empty() {
+                continue;
+            }
+
+            if parts[0] == "bestmove" {
+                break;
+            }
+
+            if parts[0] == "info" {
+                if let Some(score_index) = parts.iter().position(|&x| x == "wdl") {
+                    if score_index + 3 < parts.len() {
+                        let score_win = parts[score_index + 1].parse::<usize>().unwrap();
+                        let score_draw = parts[score_index + 2].parse::<usize>().unwrap();
+                        let score_lose = parts[score_index + 3].parse::<usize>().unwrap();
+                        result = [score_win, score_draw, score_lose];
+                    }
                 }
-                println!("=== {:?}", text);
-                // *evaluation.get_mut("type").unwrap() = text[9].to_string();
-                evaluation.insert("cp".to_string(), text[9].to_string());
-                return evaluation;
-                // for n in 0..text.len() - 1 {
-                //     if text[n] == "score" {
-                //         *evaluation.get_mut("type").unwrap() = text[n + 1].to_string();
-                //         // *evaluation.get_mut("value").unwrap() =
-                //         //     (text[n + 2].parse::<isize>().unwrap() * compare).to_string();
-                //         // return evaluation;
-                //     }
-                // }
-            } else if text[0] == "bestmove" {
-                return evaluation;
             }
         }
+        result
+    }
+
+    // TODO: change result to String to be able return e.g. "M2"
+    pub fn get_evaluation(&mut self) -> f32 {
+        let fen_position = self.get_fen_position();
+
+        let compare = if fen_position.contains('w') {
+            1.0
+        } else {
+            -1.0
+        };
+
+        self._put(&format!("position {fen_position}"));
+        self._go();
+
+        let mut evaluation_cp: Option<f32> = None;
+        let mut evaluation_mate: Option<f32> = None;
+
+        for line in self.proc.lines() {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.is_empty() {
+                continue;
+            }
+
+            if parts[0] == "bestmove" {
+                break;
+            }
+
+            if parts[0] == "info" {
+                if let Some(score_index) = parts.iter().position(|&x| x == "score") {
+                    if score_index + 2 < parts.len() {
+                        let score_type = parts[score_index + 1];
+                        let score_value = parts[score_index + 2];
+
+                        match score_type {
+                            "cp" => {
+                                if let Ok(cp_val) = score_value.parse::<f32>() {
+                                    evaluation_cp = Some(cp_val * compare);
+                                }
+                            }
+                            "mate" => {
+                                if let Ok(mate_val) = score_value.parse::<f32>() {
+                                    evaluation_mate = Some(mate_val * compare);
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+
+        if let Some(mate) = evaluation_mate {
+            return 10000.0 * mate.signum();
+        }
+
+        evaluation_cp.unwrap_or(0.0) / 100.0
     }
 
     pub fn set_skill_level(&mut self, level: usize) {
@@ -293,6 +338,7 @@ impl Stockfish {
         self.info = String::new();
     }
 
+    // TODO: after mate, returns None and panic
     fn get_move_from_proc(&mut self) -> Option<String> {
         let mut last_text = String::new();
 
@@ -799,5 +845,62 @@ mod tests {
 
         let mut sf = Stockfish::new_with_process(Box::new(mock));
         sf.make_move(vec!["d1d1".to_string()]);
+    }
+
+    #[test]
+    fn get_evaluation_returns_cp_score_for_white() {
+        let mut mock = MockProcess::new();
+
+        mock.push_read_line("Stockfish 17 by Mock");
+        mock.push_read_line("readyok");
+
+        mock.push_read_line("Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+
+        mock.push_read_line("info depth 10 score cp 37 nodes 12345");
+        mock.push_read_line("info depth 11 score cp 42 nodes 13000");
+        mock.push_read_line("bestmove e2e4");
+
+        let mut sf = Stockfish::new_with_process(Box::new(mock));
+
+        let eval = sf.get_evaluation();
+
+        assert!((eval - 0.42).abs() < 1e-6);
+    }
+
+    #[test]
+    fn get_evaluation_returns_cp_score_for_black() {
+        let mut mock = MockProcess::new();
+
+        mock.push_read_line("Stockfish 17 by Mock");
+        mock.push_read_line("readyok");
+
+        mock.push_read_line("Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1");
+
+        mock.push_read_line("info depth 10 score cp -37 nodes 12345");
+        mock.push_read_line("bestmove e7e5");
+
+        let mut sf = Stockfish::new_with_process(Box::new(mock));
+
+        let eval = sf.get_evaluation();
+
+        assert!((eval - 0.37).abs() < 1e-6);
+    }
+
+    #[test]
+    fn get_evaluation_returns_zero_if_no_score() {
+        let mut mock = MockProcess::new();
+
+        mock.push_read_line("Stockfish 17 by Mock");
+        mock.push_read_line("readyok");
+
+        mock.push_read_line("Fen: 8/8/8/8/8/8/K1k5/8 w - - 0 1");
+
+        mock.push_read_line("bestmove a1a1");
+
+        let mut sf = Stockfish::new_with_process(Box::new(mock));
+
+        let eval = sf.get_evaluation();
+
+        assert_eq!(eval, 0.0);
     }
 }
