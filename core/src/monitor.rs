@@ -4,6 +4,7 @@ use xcap::Monitor;
 /// Selects a monitor based on whether it is primary or not.
 /// If `primary` is true, it returns the primary monitor.
 /// If `primary` is false, it returns the first non-primary monitor found.
+#[allow(clippy::if_same_then_else)]
 pub fn select_monitor(primary: bool) -> Option<Monitor> {
     for m in Monitor::all().unwrap() {
         if primary && m.is_primary().unwrap() {

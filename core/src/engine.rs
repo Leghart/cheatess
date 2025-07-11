@@ -4,7 +4,7 @@
 // TODO!: handle castle + notation for stockfish
 use std::io::Write;
 
-static PIECE_TABLE: [&'static str; 128] = {
+static PIECE_TABLE: [&str; 128] = {
     let mut table = [""; 128];
     table['r' as usize] = "♜";
     table['n' as usize] = "♞";
@@ -195,8 +195,8 @@ pub fn detect_move(
     if let (Some((from_row, from_col)), Some((to_row, to_col))) = (from, to) {
         Some(format!(
             "{}{}",
-            coords_to_position(from_row, from_col, &player_color),
-            coords_to_position(to_row, to_col, &player_color)
+            coords_to_position(from_row, from_col, player_color),
+            coords_to_position(to_row, to_col, player_color)
         ))
     } else {
         None
