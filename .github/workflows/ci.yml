@@ -3,8 +3,8 @@ on: [pull_request]
 name: CI
 
 jobs:
-  check:
-    name: Check
+  prepare:
+    name: Prepare environment and build
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -13,6 +13,43 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libwayland-dev pkg-config
+
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+          override: true
+
+      - name: Build project
+        run: cargo build --release
+        working-directory: core
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: core-build
+          path: core/target/release
+
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    needs: prepare
+    strategy:
+      matrix:
+        rust:
+          - stable
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: core-build
+          path: core/target/release
 
       - name: Install toolchain
         uses: actions-rs/toolchain@v1
@@ -27,10 +64,22 @@ jobs:
   test:
     name: Run test suite
     runs-on: ubuntu-latest
-
+    needs: prepare
     steps:
-      - name: Checkout code
+      - name: Checkout sources
         uses: actions/checkout@v2
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: core-build
+          path: core/target/release
+
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
 
       - name: Run cargo test
         run: cargo test
@@ -39,6 +88,7 @@ jobs:
   fmt:
     name: Rustfmt
     runs-on: ubuntu-latest
+    needs: prepare
     strategy:
       matrix:
         rust:
@@ -46,6 +96,12 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: core-build
+          path: core/target/release
 
       - name: Install toolchain
         uses: actions-rs/toolchain@v1
@@ -57,12 +113,13 @@ jobs:
         run: rustup component add rustfmt
 
       - name: Run cargo fmt
-        run: cargo fmt  --all -- --check
+        run: cargo fmt --all -- --check
         working-directory: core
 
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
+    needs: prepare
     strategy:
       matrix:
         rust:
@@ -70,6 +127,12 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: core-build
+          path: core/target/release
 
       - name: Install toolchain
         uses: actions-rs/toolchain@v1
