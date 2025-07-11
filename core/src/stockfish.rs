@@ -45,7 +45,7 @@ impl Process for RealProcess {
 
         if self.proc.poll().is_none() {
             if let Some(stdin) = &mut self.proc.stdin {
-                writeln!(stdin, "{}", msg).expect("Failed to write to stdin");
+                writeln!(stdin, "{msg}").expect("Failed to write to stdin");
                 stdin.flush().expect("Failed to flush stdin");
             }
         }
@@ -58,7 +58,7 @@ impl Process for RealProcess {
             match reader.read_line(&mut line) {
                 Ok(0) => panic!("EOF reached unexpectedly"),
                 Ok(_) => line.trim().to_string(),
-                Err(e) => panic!("Error reading stdout: {}", e),
+                Err(e) => panic!("Error reading stdout: {e}"),
             }
         } else {
             panic!("stdout is not available");
@@ -69,6 +69,7 @@ impl Process for RealProcess {
         self.proc.poll().is_none()
     }
 
+    #[allow(clippy::lines_filter_map_ok)]
     fn lines<'a>(&'a mut self) -> Box<dyn Iterator<Item = String> + 'a> {
         if let Some(stdout) = &mut self.proc.stdout {
             let reader = BufReader::new(stdout);
@@ -250,7 +251,7 @@ impl Stockfish {
     }
 
     pub fn make_move(&mut self, moves: Vec<String>) {
-        if moves.len() == 0 {
+        if moves.is_empty() {
             return;
         }
 
@@ -384,7 +385,7 @@ impl Stockfish {
         self._put(&format!("go depth 1 searchmoves {_move}"));
         let result = self.get_move_from_proc().is_some();
         self.info = old_info;
-        return result;
+        result
     }
 
     fn read_line(&mut self) -> String {

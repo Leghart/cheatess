@@ -399,7 +399,7 @@ pub fn dynamic_image_to_gray_mat(img: &DynamicImage) -> opencv::Result<Mat> {
         Mat::new_rows_cols_with_default(height as i32, width as i32, CV_8UC4, Scalar::all(0.0))?;
 
     let mat_data = mat.data_bytes_mut()?;
-    mat_data.copy_from_slice(&rgba8.as_raw());
+    mat_data.copy_from_slice(rgba8.as_raw());
 
     let mut gray_mat = Mat::default();
     imgproc::cvt_color(&mat, &mut gray_mat, imgproc::COLOR_RGBA2GRAY, 0)?;

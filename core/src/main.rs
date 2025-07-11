@@ -45,7 +45,7 @@ fn run() {
     let mut prev_board_mat = board;
     let mut prev_board_arr = base_board;
     let best_move = st.get_best_move().unwrap();
-    println!("Stockfish best move: {}", best_move);
+    println!("Stockfish best move: {best_move}");
 
     println!("---->{:?}", st.get_evaluation());
 
@@ -64,7 +64,7 @@ fn run() {
         let detected_move = engine::detect_move(&prev_board_arr.raw, &new_raw_board, &player_color);
 
         if let Some(mv) = detected_move {
-            println!("Detected move: {:?}", mv);
+            println!("Detected move: {mv:?}");
             st.make_move(vec![mv]);
         } else {
             println!("not found move");
@@ -74,7 +74,7 @@ fn run() {
         let curr_board = engine::Board::new(new_raw_board);
         curr_board.print(&mut stdout);
         let best_move = st.get_best_move().unwrap();
-        println!("Stockfish best move: {}", best_move);
+        println!("Stockfish best move: {best_move}");
         println!("---->{:?}", st.get_evaluation());
         println!("====>{:?}", st.get_wdl_stats());
 

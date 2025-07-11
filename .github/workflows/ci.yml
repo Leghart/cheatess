@@ -1,7 +1,7 @@
 on: [pull_request]
 
-name: Basic CI
-
+name: CI
+# TODO: optimize with prepared image with all required packages
 jobs:
   check:
     name: Check
@@ -14,6 +14,9 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v2
 
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libopencv-dev libwayland-dev pkg-config libpipewire-0.3-dev libegl-dev
+
       - name: Install toolchain
         uses: actions-rs/toolchain@v1
         with:
@@ -21,22 +24,28 @@ jobs:
           override: true
 
       - name: Run cargo check
-        uses: actions-rs/cargo@v1
-        with:
-          command: check
+        run: cargo check
+        working-directory: core
 
   test:
     name: Run test suite
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Run cargo test
-        uses: actions-rs/cargo@v1
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libopencv-dev libwayland-dev pkg-config libpipewire-0.3-dev libegl-dev libgbm-dev
+
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
         with:
-          command: test
+          toolchain: stable
+          override: true
+
+      - name: Run cargo test
+        run: cargo test
+        working-directory: core
 
   fmt:
     name: Rustfmt
@@ -49,6 +58,9 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v2
 
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libopencv-dev libwayland-dev pkg-config libpipewire-0.3-dev libegl-dev
+
       - name: Install toolchain
         uses: actions-rs/toolchain@v1
         with:
@@ -59,10 +71,8 @@ jobs:
         run: rustup component add rustfmt
 
       - name: Run cargo fmt
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+        run: cargo fmt --all -- --check
+        working-directory: core
 
   clippy:
     name: Clippy
@@ -75,6 +85,9 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v2
 
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libopencv-dev libwayland-dev pkg-config libpipewire-0.3-dev libegl-dev
+
       - name: Install toolchain
         uses: actions-rs/toolchain@v1
         with:
@@ -85,7 +98,5 @@ jobs:
         run: rustup component add clippy
 
       - name: Run cargo clippy
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: -- -D warnings
+        run: cargo clippy -- -D warnings
+        working-directory: core
