@@ -12,4 +12,4 @@ xcap = { version = "0.6.1", default-features = false }
 [dev-dependencies]
 rstest = "0.24.0"
 opencv = { version = "0.94.2", default-features = false, features = ["imgcodecs"] }
-
+clippy = "0.0.302"
