@@ -32,6 +32,7 @@ fn run() {
     let board = procimg::dynamic_image_to_gray_mat(&dyn_image).unwrap();
 
     let player_color = procimg::detect_player_color(&board);
+    println!("{player_color:?}");
 
     let base_board = engine::create_board::<engine::PrettyPrinter>(&player_color);
     base_board.print(&mut stdout);
@@ -61,7 +62,8 @@ fn run() {
 
         let new_raw_board = procimg::find_all_pieces(&gray_board, &pieces);
 
-        let detected_move = engine::detect_move(&prev_board_arr.raw, &new_raw_board, &player_color);
+        let detected_move =
+            engine::detect_move(prev_board_arr.raw(), &new_raw_board, &player_color);
 
         if let Some(mv) = detected_move {
             println!("Detected move: {mv:?}");
@@ -71,7 +73,16 @@ fn run() {
         }
 
         clear_screen();
-        let curr_board = engine::Board::new(new_raw_board);
+        let curr_board: Box<dyn engine::AnyBoard<engine::PrettyPrinter>> = match player_color {
+            engine::Color::White => Box::new(engine::Board::<
+                engine::PrettyPrinter,
+                engine::WhiteView,
+            >::new(new_raw_board)),
+            engine::Color::Black => Box::new(engine::Board::<
+                engine::PrettyPrinter,
+                engine::BlackView,
+            >::new(new_raw_board)),
+        };
         curr_board.print(&mut stdout);
         let best_move = st.get_best_move().unwrap();
         println!("Stockfish best move: {best_move}");
