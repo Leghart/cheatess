@@ -142,7 +142,7 @@ impl<P: Printer, V: View> Board<P, V> {
         for j in 0..8 {
             let col = V::col(j);
             let letter = (b'a' + col as u8) as char;
-            write!(writer, " {}  ", letter).unwrap();
+            write!(writer, " {letter}  ").unwrap();
         }
         writeln!(writer).unwrap();
         writeln!(writer, "  +---+---+---+---+---+---+---+---+").unwrap();
@@ -164,7 +164,7 @@ impl<P: Printer, V: View> Board<P, V> {
         for j in 0..8 {
             let col = V::col(j);
             let letter = (b'a' + col as u8) as char;
-            write!(writer, " {}  ", letter).unwrap();
+            write!(writer, " {letter}  ").unwrap();
         }
         writeln!(writer).unwrap();
     }
