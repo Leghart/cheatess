@@ -65,14 +65,14 @@ fn run() {
         let detected_move =
             engine::detect_move(prev_board_arr.raw(), &new_raw_board, &player_color);
 
-        if let Some(mv) = detected_move {
-            println!("Detected move: {mv:?}");
+        clear_screen();
+        if let Ok((mv, mv_t)) = detected_move {
+            println!("Detected move: {mv:?} [{mv_t:?}]");
             st.make_move(vec![mv]);
         } else {
             println!("not found move");
         }
 
-        clear_screen();
         let curr_board: Box<dyn engine::AnyBoard<engine::PrettyPrinter>> = match player_color {
             engine::Color::White => Box::new(engine::Board::<
                 engine::PrettyPrinter,
@@ -95,7 +95,6 @@ fn run() {
     }
 }
 
-/// Clears the terminal screen by printing escape sequences.
 fn clear_screen() {
     print!("\x1B[2J\x1B[H");
 }
