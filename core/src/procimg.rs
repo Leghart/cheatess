@@ -107,8 +107,6 @@ pub fn find_all_pieces(
 }
 
 /// Processes a single chess piece image against a board image.
-/// This function uses template matching to find the piece on the board and registers its position.
-/// It updates the `result` array with the found piece's symbol at the corresponding board position
 /// Both images (board and piece) are already binary thresholded, so mask is not needed.
 fn single_process(
     board_image: &Mat,
@@ -186,9 +184,6 @@ fn single_process(
     Ok(result)
 }
 
-/// Detects the player's color by analyzing the bottom row of the chessboard.
-/// It thresholds the grayscale image to create a binary image,
-/// then checks the ratio of black pixels in the bottom row to determine if the player is playing with white or black pieces.
 pub fn detect_player_color(gray_board: &Mat) -> Color {
     let mut bin_board = Mat::default();
     imgproc::threshold(
@@ -243,7 +238,6 @@ pub fn detect_player_color(gray_board: &Mat) -> Color {
 /// - Find contours in the edge-detected image
 /// - Approximate the contours to find quadrilaterals
 pub fn get_board_region(gray: &Mat) -> (u32, u32, u32, u32) {
-    // contours without blurring to keep sharp edges
     let mut edges = Mat::default();
     imgproc::canny(&gray, &mut edges, 50.0, 150.0, 3, false).unwrap();
 
@@ -291,8 +285,6 @@ pub fn get_board_region(gray: &Mat) -> (u32, u32, u32, u32) {
 }
 
 /// Checks if two images have differences in their 8x8 grid cells.
-/// It divides the images into 8x8 cells and checks if the number of non-zero
-/// pixels in each cell exceeds a given threshold.
 pub fn images_have_differences(gray1: &Mat, gray2: &Mat, threshold: i32) -> bool {
     let cell_w = gray1.cols() / 8;
     let cell_h = gray1.rows() / 8;
@@ -341,9 +333,6 @@ pub fn images_have_differences(gray1: &Mat, gray2: &Mat, threshold: i32) -> bool
     false
 }
 
-/// Extracts pieces from the chessboard image.
-/// It divides the board into 8x8 cells and extracts the pieces based on predefined positions.
-/// It applies a margin to the extraction area to avoid cutting off pieces.
 pub fn extract_pieces(
     img: &Mat,
     player_color: &Color,
@@ -388,9 +377,6 @@ pub fn extract_pieces(
     Ok(result)
 }
 
-/// Converts a DynamicImage to a grayscale Mat.
-/// It first converts the image to RGBA8 format, then creates a Mat from the pixel data.
-/// Finally, it converts the RGBA Mat to a grayscale Mat using OpenCV's cvt_color function.
 pub fn dynamic_image_to_gray_mat(img: &DynamicImage) -> opencv::Result<Mat> {
     let rgba8 = img.to_rgba8();
     let (width, height) = rgba8.dimensions();

@@ -1,7 +1,6 @@
 // Logic based on board operations with arrays representaitons.
 // Contains functions which calculate position in board, detect last move,
 // transform data to stockfish format etc.
-// TODO!: handle castle + notation for stockfish
 use std::io::Write;
 
 static PIECE_TABLE: [&str; 128] = {
@@ -201,7 +200,6 @@ pub fn register_piece(
 }
 
 // Change (x,y) coordiantes to string position representation.
-// TODO: add color handling (now only for whites)
 fn coords_to_position(row: usize, col: usize, player_color: &Color) -> String {
     if player_color == &Color::White {
         let file = (b'a' + col as u8) as char;
@@ -214,44 +212,144 @@ fn coords_to_position(row: usize, col: usize, player_color: &Color) -> String {
     }
 }
 
-pub fn detect_move(
+#[derive(Debug)]
+pub struct DiffSquare {
+    row: usize,
+    col: usize,
+    piece_before: char,
+    piece_after: char,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum MoveType {
+    Forward,
+    Capture,
+    Promotion,
+    PromotionCapture,
+    EnPassant,
+    Castle,
+    Unknown,
+}
+
+pub fn get_coords_moved_pieces(
     before: &[[char; 8]; 8],
     after: &[[char; 8]; 8],
-    player_color: &Color,
-) -> Option<String> {
-    let mut from: Option<(usize, usize)> = None;
-    let mut to: Option<(usize, usize)> = None;
+) -> Result<Vec<DiffSquare>, Box<dyn std::error::Error>> {
+    static MAX_MOVES: usize = 4;
+    let mut changes: Vec<DiffSquare> = Vec::with_capacity(MAX_MOVES);
 
     for row in 0..8 {
         for col in 0..8 {
             if before[row][col] != after[row][col] {
-                // Previously piece was at (row, col) in `before` and now this place
-                // is empty.
-                if before[row][col] != ' ' && after[row][col] == ' ' {
-                    from = Some((row, col));
-                }
-
-                // Piece moved from empty place to a new one.
-                if before[row][col] == ' ' && after[row][col] != ' ' {
-                    to = Some((row, col));
-                }
-
-                // Piece was captured by another one.
-                if before[row][col] != ' ' && after[row][col] != ' ' {
-                    to = Some((row, col));
+                if changes.len() <= MAX_MOVES {
+                    changes.push(DiffSquare {
+                        row,
+                        col,
+                        piece_before: before[row][col],
+                        piece_after: after[row][col],
+                    })
+                } else {
+                    return Err("Too much position detected".into());
                 }
             }
         }
     }
+    Ok(changes)
+}
+
+pub fn detect_move(
+    before: &[[char; 8]; 8],
+    after: &[[char; 8]; 8],
+    player_color: &Color,
+) -> Result<(String, MoveType), Box<dyn std::error::Error>> {
+    let from: Option<(usize, usize)>;
+    let mut to: Option<(usize, usize)> = None;
+    let mut move_type: MoveType = MoveType::Unknown;
+
+    let changed_moves = get_coords_moved_pieces(before, after)?;
+
+    match changed_moves.len() {
+        // normal move forward / capture piece / promotion w/t capture
+        2 => {
+            if changed_moves //naive check if moved without any capture -> Forward or Promotion
+                .iter()
+                .all(|d| (d.piece_before == ' ' || d.piece_after == ' '))
+            {
+                let _from = changed_moves
+                    .iter()
+                    .find(|&d| d.piece_before != ' ' && d.piece_after == ' ')
+                    .expect("There should be at least one record with ' '!!!");
+                from = Some((_from.row, _from.col));
+
+                for diff in &changed_moves {
+                    if diff.piece_before == ' ' && diff.piece_after != ' ' {
+                        to = Some((diff.row, diff.col));
+                        if diff.piece_after == _from.piece_before {
+                            move_type = MoveType::Forward;
+                        } else {
+                            move_type = MoveType::Promotion;
+                        }
+                    }
+                }
+            } else {
+                // e.x. [(1,2, 'p', ' '), (1,1, 'N', 'p') ] or  [(6,6,'P', ' ' ), (7,6, 'b', 'Q')]  -> Capture or PromotionCapture
+                let _from = changed_moves
+                    .iter()
+                    .find(|&d| d.piece_after == ' ')
+                    .expect("There should be at least one record with ' '!!!");
+                from = Some((_from.row, _from.col));
+
+                for diff in &changed_moves {
+                    if diff.piece_before != ' ' && diff.piece_after != ' ' {
+                        to = Some((diff.row, diff.col));
+                        if diff.piece_after == _from.piece_before {
+                            move_type = MoveType::Capture;
+                        } else {
+                            move_type = MoveType::PromotionCapture;
+                        }
+                    }
+                }
+            }
+        }
+        //en pasoint
+        3 => {
+            let _to = changed_moves
+                .iter()
+                .find(|&d| d.piece_before == ' ' && d.piece_after != ' ')
+                .expect("There should exactly one record with pawn move: ' ' -> 'P' | 'p'");
+            to = Some((_to.row, _to.col));
+
+            let _from = changed_moves
+                .iter()
+                .find(|&d| d.piece_before == _to.piece_after)
+                .expect("There should be exactly one record where target pawn moved from start positon to desired");
+            from = Some((_from.row, _from.col));
+            move_type = MoveType::EnPassant;
+        }
+        //castle
+        4 => {
+            let _to = changed_moves
+                .iter()
+                .find(|&d| d.piece_before == ' ' && (d.piece_after == 'k' || d.piece_after == 'K'))
+                .expect("King (black or white) disappeared :O");
+            to = Some((_to.row, _to.col));
+
+            let _from = changed_moves
+                .iter()
+                .find(|&d| d.piece_before == _to.piece_after)
+                .expect("Not found king start position");
+            from = Some((_from.row, _from.col));
+            move_type = MoveType::Castle;
+        }
+        _ => return Err("Unrechable".into()),
+    }
 
     if let (Some((from_row, from_col)), Some((to_row, to_col))) = (from, to) {
-        Some(format!(
-            "{}{}",
-            coords_to_position(from_row, from_col, player_color),
-            coords_to_position(to_row, to_col, player_color)
-        ))
+        let x = coords_to_position(from_row, from_col, player_color);
+        let y = coords_to_position(to_row, to_col, player_color);
+        Ok((format!("{x}{y}"), move_type))
     } else {
-        None
+        Err("Unrechable".into())
     }
 }
 
@@ -363,7 +461,7 @@ mod tests {
         ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
         ['r', ' ', 'b', 'k', 'q', 'b', 'n', 'r'],
     ],"g8f6".to_string(),Color::Black,Board::<DefaultPrinter,BlackView>::default_black())]
-    fn detect_simple_move(
+    fn detect_move_forward(
         #[case] after_move: [[char; 8]; 8],
         #[case] _move: String,
         #[case] player_color: Color,
@@ -371,13 +469,16 @@ mod tests {
     ) {
         let result = detect_move(&init_board.raw, &after_move, &player_color);
 
-        assert!(result.is_some());
-        assert_eq!(result.unwrap(), _move);
+        assert!(result.is_ok());
+
+        let (result_move, move_type) = result.unwrap();
+        assert_eq!(result_move, _move);
+        assert_eq!(move_type, MoveType::Forward);
     }
 
     #[rstest]
     #[case([
-        ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
+        ['r', 'n', 'b', ' ', 'k', 'b', 'n', 'r'],
         ['p', 'p', ' ', ' ', 'p', 'p', 'p', 'p'],
         [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
         [' ', 'P', ' ', ' ', ' ', ' ', 'N', ' '],
@@ -386,35 +487,35 @@ mod tests {
         ['P', ' ', 'P', ' ', ' ', 'P', ' ', 'P'],
         ['R', 'N', ' ', 'Q', 'K', 'B', 'N', 'R'],
     ],[
-        ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
-        ['p', 'p', ' ', ' ', 'p', 'p', 'p', ' '],
+        ['r', 'n', 'b', ' ', 'k', 'b', 'n', 'r'],
+        ['p', 'p', ' ', ' ', 'p', 'p', 'p', 'p'],
         [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
-        [' ', 'P', ' ', ' ', ' ', ' ', 'N', 'p'],
-        [' ', ' ', 'p', 'q', 'P', ' ', ' ', ' '],
+        [' ', 'P', ' ', ' ', ' ', ' ', 'N', ' '],
+        [' ', ' ', 'p', 'Q', 'P', ' ', ' ', ' '],
         [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
         ['P', ' ', 'P', ' ', ' ', 'P', ' ', 'P'],
-        ['R', 'N', ' ', 'Q', 'K', 'B', 'N', 'R'],
-    ],"h7h5".to_string(), Color::White)]
+        ['R', 'N', ' ', ' ', 'K', 'B', 'N', 'R'],
+    ],"d1d4".to_string(), Color::White)]
     #[case([
         ['R', 'N', 'B', 'K', 'Q', 'B', 'N', 'R'],
         ['P', 'P', 'P', 'P', 'P', ' ', 'P', 'P'],
         [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
-        [' ', 'q', ' ', 'P', ' ', 'p', ' ', ' '],
+        [' ', 'q', ' ', 'P', ' ', ' ', ' ', ' '],
         [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
         [' ', ' ', ' ', ' ', 'P', ' ', ' ', ' '],
         ['p', ' ', 'p', 'p', 'p', 'p', 'p', 'p'],
         ['r', 'n', 'b', ' ', 'q', 'k', ' ', ' ']
     ],[
         ['R', 'N', 'B', 'K', 'Q', 'B', 'N', 'R'],
-        ['P', 'P', 'P', 'P', 'P', ' ', 'P', 'P'],
-        [' ', ' ', ' ', ' ', ' ', 'p', ' ', ' '],
-        [' ', 'q', ' ', 'P', ' ', ' ', ' ', ' '],
+        ['P', 'P', 'P', 'q', 'P', ' ', 'P', 'P'],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', 'P', ' ', ' ', ' ', ' '],
         [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
         [' ', ' ', ' ', ' ', 'P', ' ', ' ', ' '],
         ['p', ' ', 'p', 'p', 'p', 'p', 'p', 'p'],
         ['r', 'n', 'b', ' ', 'q', 'k', ' ', ' ']
-    ],"c4c3".to_string(),Color::Black)]
-    fn detect_complex_move(
+    ],"g4e2".to_string(),Color::Black)]
+    fn detect_move_capture_piece(
         #[case] before_move: [[char; 8]; 8],
         #[case] after_move: [[char; 8]; 8],
         #[case] _move: String,
@@ -422,8 +523,263 @@ mod tests {
     ) {
         let result = detect_move(&before_move, &after_move, &player_color);
 
-        assert!(result.is_some());
-        assert_eq!(result.unwrap(), _move);
+        assert!(result.is_ok());
+
+        let (result_move, move_type) = result.unwrap();
+        assert_eq!(result_move, _move);
+        assert_eq!(move_type, MoveType::Capture);
+    }
+
+    #[rstest]
+    #[case([
+        ['r', 'n', 'b', ' ', 'k', 'b', 'n', 'r'],
+        ['p', 'p', ' ', 'P', 'p', 'p', 'p', 'p'],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', 'P', ' ', ' ', ' ', ' ', 'N', ' '],
+        [' ', ' ', 'p', ' ', 'P', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        ['P', ' ', 'P', ' ', ' ', 'P', ' ', 'P'],
+        ['R', 'N', ' ', 'Q', 'K', 'B', 'N', 'R'],
+    ],[
+        ['r', 'n', 'b', 'Q', 'k', 'b', 'n', 'r'],
+        ['p', 'p', ' ', ' ', 'p', 'p', 'p', 'p'],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', 'P', ' ', ' ', ' ', ' ', 'N', ' '],
+        [' ', ' ', 'p', ' ', 'P', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        ['P', ' ', 'P', ' ', ' ', 'P', ' ', 'P'],
+        ['R', 'N', ' ', 'Q', 'K', 'B', 'N', 'R'],
+    ],"d7d8".to_string(), Color::White)]
+    #[case([
+        ['R', 'N', ' ', 'K', 'Q', 'B', 'N', 'R'],
+        ['P', 'P', 'p', 'P', 'P', ' ', 'P', 'P'],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', 'P', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', 'P', ' ', ' ', ' '],
+        ['p', ' ', 'p', 'p', 'p', 'p', 'p', 'p'],
+        ['r', 'n', 'b', ' ', 'q', 'k', ' ', ' ']
+    ],[
+        ['R', 'N', 'r', 'K', 'Q', 'B', 'N', 'R'],
+        ['P', 'P', ' ', 'P', 'P', ' ', 'P', 'P'],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', 'P', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', 'P', ' ', ' ', ' '],
+        ['p', ' ', 'p', 'p', 'p', 'p', 'p', 'p'],
+        ['r', 'n', 'b', ' ', 'q', 'k', ' ', ' ']
+    ],"f2f1".to_string(),Color::Black)]
+    fn detect_move_simple_promotion(
+        #[case] before_move: [[char; 8]; 8],
+        #[case] after_move: [[char; 8]; 8],
+        #[case] _move: String,
+        #[case] player_color: Color,
+    ) {
+        let result = detect_move(&before_move, &after_move, &player_color);
+
+        assert!(result.is_ok());
+
+        let (result_move, move_type) = result.unwrap();
+        assert_eq!(result_move, _move);
+        assert_eq!(move_type, MoveType::Promotion);
+    }
+
+    #[rstest]
+    #[case([
+        ['r', 'n', 'b', ' ', 'k', 'b', 'n', 'r'],
+        ['p', 'p', ' ', 'P', 'p', 'p', 'p', 'p'],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', 'P', ' ', ' ', ' ', ' ', 'N', ' '],
+        [' ', ' ', 'p', ' ', 'P', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        ['P', ' ', 'P', ' ', ' ', 'P', ' ', 'P'],
+        ['R', 'N', ' ', 'Q', 'K', 'B', 'N', 'R'],
+    ],[
+        ['r', 'n', 'Q', ' ', 'k', 'b', 'n', 'r'],
+        ['p', 'p', ' ', ' ', 'p', 'p', 'p', 'p'],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', 'P', ' ', ' ', ' ', ' ', 'N', ' '],
+        [' ', ' ', 'p', ' ', 'P', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        ['P', ' ', 'P', ' ', ' ', 'P', ' ', 'P'],
+        ['R', 'N', ' ', 'Q', 'K', 'B', 'N', 'R'],
+    ],"d7c8".to_string(), Color::White)]
+    #[case([
+        ['R', 'N', ' ', 'K', 'Q', 'B', 'N', 'R'],
+        ['P', 'P', 'p', 'P', 'P', ' ', 'P', 'P'],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', 'P', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', 'P', ' ', ' ', ' '],
+        ['p', ' ', 'p', 'p', 'p', 'p', 'p', 'p'],
+        ['r', 'n', 'b', ' ', 'q', 'k', ' ', ' ']
+    ],[
+        ['R', 'Q', ' ', 'K', 'Q', 'B', 'N', 'R'],
+        ['P', 'P', ' ', 'P', 'P', ' ', 'P', 'P'],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', 'P', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', 'P', ' ', ' ', ' '],
+        ['p', ' ', 'p', 'p', 'p', 'p', 'p', 'p'],
+        ['r', 'n', 'b', ' ', 'q', 'k', ' ', ' ']
+    ],"f2g1".to_string(),Color::Black)]
+    fn detect_move_promotion_with_capture(
+        #[case] before_move: [[char; 8]; 8],
+        #[case] after_move: [[char; 8]; 8],
+        #[case] _move: String,
+        #[case] player_color: Color,
+    ) {
+        let result = detect_move(&before_move, &after_move, &player_color);
+
+        assert!(result.is_ok());
+
+        let (result_move, move_type) = result.unwrap();
+        assert_eq!(result_move, _move);
+        assert_eq!(move_type, MoveType::PromotionCapture);
+    }
+
+    #[rstest]
+    #[case([
+        ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
+        ['p', 'p', 'p', 'p', ' ', 'p', 'p', 'p'],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', 'P', 'p', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        ['P', 'P', 'P', ' ', 'P', 'P', 'P', 'P'],
+        ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R'],
+    ],[
+        ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
+        ['p', 'p', 'p', 'p', ' ', 'p', 'p', 'p'],
+        [' ', ' ', ' ', ' ', 'P', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        ['P', 'P', 'P', ' ', 'P', 'P', 'P', 'P'],
+        ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R'],
+    ],"d5e6".to_string(), Color::White)]
+    #[case([
+        ['R', 'N', 'B', 'K', 'Q', 'B', 'N', 'R'],
+        ['P', 'P', 'p', 'P', 'P', ' ', 'P', 'P'],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', 'P', 'p', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        ['p', 'p', 'p', 'p', 'p', 'p', ' ', 'p'],
+        ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r']
+    ],[
+        ['R', 'N', 'B', 'K', 'Q', 'B', 'N', 'R'],
+        ['P', 'P', 'p', 'P', 'P', ' ', 'P', 'P'],
+        [' ', ' ', ' ', ' ', ' ', 'p', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        ['p', 'p', 'p', 'p', 'p', 'p', ' ', 'p'],
+        ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r']
+    ],"b4c3".to_string(),Color::Black)]
+    fn detect_move_en_passant(
+        #[case] before_move: [[char; 8]; 8],
+        #[case] after_move: [[char; 8]; 8],
+        #[case] _move: String,
+        #[case] player_color: Color,
+    ) {
+        let result = detect_move(&before_move, &after_move, &player_color);
+
+        assert!(result.is_ok());
+
+        let (result_move, move_type) = result.unwrap();
+        assert_eq!(result_move, _move);
+        assert_eq!(move_type, MoveType::EnPassant);
+    }
+
+    #[rstest]
+    #[case([
+        ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
+        ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
+        ['R', 'N', 'B', 'Q', 'K', ' ', ' ', 'R'],
+    ],[
+        ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
+        ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
+        ['R', 'N', 'B', 'Q', ' ', 'R', 'K', ' '],
+    ],"e1g1".to_string(), Color::White)]
+    #[case([
+        ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
+        ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
+        ['R', ' ', ' ', ' ', 'K', 'B', 'N', 'R'],
+    ],[
+        ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
+        ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
+        [' ', ' ', 'K', 'R', ' ', 'B', 'N', 'R'],
+    ],"e1c1".to_string(),Color::White)]
+    #[case([
+        ['R', 'N', 'B', 'K', 'Q', 'B', 'N', 'R'],
+        ['P', 'P', 'p', 'P', 'P', 'P', 'P', 'P'],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+        ['r', ' ', ' ', 'k', 'q', 'b', 'n', 'r']
+    ],[
+        ['R', 'N', 'B', 'K', 'Q', 'B', 'N', 'R'],
+        ['P', 'P', 'p', 'P', 'P', 'P', 'P', 'P'],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+        [' ', 'k', 'r', ' ', 'q', 'b', 'n', 'r']
+    ],"e8g8".to_string(), Color::Black)]
+    #[case([
+        ['R', 'N', 'B', 'K', 'Q', 'B', 'N', 'R'],
+        ['P', 'P', 'p', 'P', 'P', 'P', 'P', 'P'],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+        ['r', 'n', 'b', 'k', ' ', ' ', ' ', 'r']
+    ],[
+        ['R', 'N', 'B', 'K', 'Q', 'B', 'N', 'R'],
+        ['P', 'P', 'p', 'P', 'P', 'P', 'P', 'P'],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+        ['r', 'n', 'b', ' ', 'r', 'k', ' ', ' ']
+    ],"e8c8".to_string(),Color::Black)]
+    fn detect_move_castle(
+        #[case] before_move: [[char; 8]; 8],
+        #[case] after_move: [[char; 8]; 8],
+        #[case] _move: String,
+        #[case] player_color: Color,
+    ) {
+        let result = detect_move(&before_move, &after_move, &player_color);
+
+        let (result_move, move_type) = result.unwrap();
+        assert_eq!(result_move, _move);
+        assert_eq!(move_type, MoveType::Castle);
     }
 
     #[rstest]
