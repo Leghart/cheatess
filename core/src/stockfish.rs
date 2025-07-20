@@ -80,17 +80,6 @@ impl Process for RealProcess {
     }
 }
 
-/// ```
-/// let mut stock = Stockfish::new("/home/leghart/projects/chessify_utils/stockfish_15.1_linux_x64/stockfish-ubuntu-20.04-x86-64");
-/// stock.set_config();
-/// stock.set_elo_rating(2200);
-/// for _ in 0..25 {
-///     let t = std::time::Instant::now();
-///     let best_move = stock.get_best_move().unwrap();
-///     println!("best move: {best_move} {:?}", t.elapsed());
-///     stock.make_move(vec![best_move]);
-/// }
-/// ```
 pub struct Stockfish {
     proc: Box<dyn Process>,
     pub parameters: HashMap<String, String>,
@@ -200,8 +189,8 @@ impl Stockfish {
             }
 
             if parts[0] == "info" {
-                println!("{parts:?}");
                 if let Some(score_index) = parts.iter().position(|&x| x == "score") {
+                    log::trace!("raw stockfish output: {parts:?}");
                     if score_index + 2 < parts.len() {
                         let score_type = parts[score_index + 1];
                         let score_value = parts[score_index + 2];
@@ -282,7 +271,7 @@ impl Stockfish {
         if !self.parameters.is_empty() {
             for key in new_param_values.keys() {
                 if !self.parameters.contains_key(*key) {
-                    panic!("TODO"); //TODO!
+                    panic!("TODO!");
                 }
             }
         }
@@ -442,10 +431,6 @@ mod tests {
 
         pub fn push_read_line(&mut self, line: &str) {
             self.lines_to_read.push_back(line.to_string());
-        }
-
-        pub fn set_running(&mut self, running: bool) {
-            self.running = running;
         }
     }
 
