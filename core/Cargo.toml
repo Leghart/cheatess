@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+clap = { version = "4.5.41", default-features = false, features = ["std"] }
+clap-verbosity-flag = { version = "3.0.3", default-features = false, features=["log"]}
 image = { version = "0.25", default-features = false }
 log = { version = "0.4.27", default-features = false }
 opencv = { version = "0.94.2", default-features = false, features = ["clang-runtime", "imgproc", "highgui"] }

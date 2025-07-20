@@ -30,7 +30,6 @@ pub trait Printer {
 }
 
 pub struct DefaultPrinter;
-
 impl Printer for DefaultPrinter {
     fn print_piece(piece: char) -> String {
         piece.to_string()
@@ -42,11 +41,6 @@ impl Printer for PrettyPrinter {
     fn print_piece(piece: char) -> String {
         get_piece(piece).unwrap_or(" ").to_string()
     }
-}
-
-pub trait AnyBoard<P: Printer> {
-    fn print(&self, writer: &mut dyn Write);
-    fn raw(&self) -> &[[char; 8]; 8];
 }
 
 pub trait View {
@@ -72,4 +66,9 @@ impl View for BlackView {
     fn col(i: usize) -> usize {
         7 - i
     }
+}
+
+pub trait AnyBoard {
+    fn print(&self, writer: &mut dyn Write);
+    fn raw(&self) -> &[[char; 8]; 8];
 }
