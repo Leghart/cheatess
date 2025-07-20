@@ -2,15 +2,15 @@ use image::{ImageBuffer, Rgba};
 use xcap::Monitor;
 
 #[allow(clippy::if_same_then_else)]
-pub fn select_monitor(primary: bool) -> Option<Monitor> {
+pub fn select_monitor(primary: bool) -> Result<Monitor, Box<dyn std::error::Error>> {
     for m in Monitor::all().unwrap() {
         if primary && m.is_primary().unwrap() {
-            return Some(m);
+            return Ok(m);
         } else if !primary && !m.is_primary().unwrap() {
-            return Some(m);
+            return Ok(m);
         }
     }
-    None
+    Err("Monitor not found".into())
 }
 
 pub fn capture_entire_screen(monitor: &Monitor) -> ImageBuffer<Rgba<u8>, Vec<u8>> {

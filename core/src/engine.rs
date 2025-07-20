@@ -196,7 +196,7 @@ pub fn detect_move(
     let changed_moves = get_coords_moved_pieces(before, after)?;
 
     match changed_moves.len() {
-        // normal move forward / capture piece / promotion w/t capture
+        // move forward / capture piece / promotion w/t capture
         2 => {
             if changed_moves //naive check if moved without any capture -> Forward or Promotion
                 .iter()
@@ -243,13 +243,13 @@ pub fn detect_move(
             let _to = changed_moves
                 .iter()
                 .find(|&d| d.piece_before == ' ' && d.piece_after != ' ')
-                .expect("There should exactly one record with pawn move: ' ' -> 'P' | 'p'");
+                .expect("There should be exactly one record with a pawn move: ' ' -> 'P' | 'p'");
             to = Some((_to.row, _to.col));
 
             let _from = changed_moves
                 .iter()
                 .find(|&d| d.piece_before == _to.piece_after)
-                .expect("There should be exactly one record where target pawn moved from start positon to desired");
+                .expect("There should be exactly one record in which the target pawn moves from the starting position to the target position");
             from = Some((_from.row, _from.col));
             move_type = MoveType::EnPassant;
         }
@@ -258,17 +258,17 @@ pub fn detect_move(
             let _to = changed_moves
                 .iter()
                 .find(|&d| d.piece_before == ' ' && (d.piece_after == 'k' || d.piece_after == 'K'))
-                .expect("King (black or white) disappeared :O");
+                .expect("King's end position not found");
             to = Some((_to.row, _to.col));
 
             let _from = changed_moves
                 .iter()
                 .find(|&d| d.piece_before == _to.piece_after)
-                .expect("Not found king start position");
+                .expect("King's start position not found");
             from = Some((_from.row, _from.col));
             move_type = MoveType::Castle;
         }
-        _ => return Err("Unrechable".into()),
+        _ => unreachable!(),
     }
 
     if let (Some((from_row, from_col)), Some((to_row, to_col))) = (from, to) {
@@ -276,7 +276,7 @@ pub fn detect_move(
         let y = coords_to_position(to_row, to_col, player_color);
         Ok((format!("{x}{y}"), move_type))
     } else {
-        Err("Unrechable".into())
+        unreachable!()
     }
 }
 

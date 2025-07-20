@@ -84,7 +84,7 @@ pub fn find_all_pieces(
         let sign = *sign;
 
         let handle = thread::spawn(move || {
-            let local_result = single_process(&board, &piece, 0.1, sign).unwrap();
+            let local_result = find_piece_location(&board, &piece, 0.1, sign).unwrap();
 
             let mut res = result_ref.lock().unwrap();
             for row in 0..8 {
@@ -106,9 +106,8 @@ pub fn find_all_pieces(
     new_data
 }
 
-/// Processes a single chess piece image against a board image.
 /// Both images (board and piece) are already binary thresholded, so mask is not needed.
-fn single_process(
+fn find_piece_location(
     board_image: &Mat,
     piece_image: &Mat,
     threshold: f64,
@@ -232,11 +231,11 @@ pub fn detect_player_color(gray_board: &Mat) -> Color {
     }
 }
 
-/// This function captures the screen and returns the region of the chessboard
+/// Captures the screen and returns the region of the chessboard
 /// with the following steps:
-/// - Apply Canny edge detection to find the edges
-/// - Find contours in the edge-detected image
-/// - Approximate the contours to find quadrilaterals
+/// - apply Canny edge detection to find the edges
+/// - find contours in the edge-detected image
+/// - approximate the contours to find quadrilaterals
 pub fn get_board_region(gray: &Mat) -> (u32, u32, u32, u32) {
     let mut edges = Mat::default();
     imgproc::canny(&gray, &mut edges, 50.0, 150.0, 3, false).unwrap();
@@ -281,11 +280,18 @@ pub fn get_board_region(gray: &Mat) -> (u32, u32, u32, u32) {
     let width = best_quad[2].x as u32 - x_start;
     let height = best_quad[2].y as u32 - y_start;
 
+    log::trace!(
+        "Board corners parameters: top-left=({},{}) top-right=({},{}) bottom-left=({},{}) bottom-right=({},{})",
+        x_start, y_start,
+        x_start+width,y_start,
+        x_start,y_start+height,
+        x_start+width,y_start+height
+    );
     (x_start, y_start, width, height)
 }
 
 /// Checks if two images have differences in their 8x8 grid cells.
-pub fn images_have_differences(gray1: &Mat, gray2: &Mat, threshold: i32) -> bool {
+pub fn are_images_different(gray1: &Mat, gray2: &Mat, threshold: i32) -> bool {
     let cell_w = gray1.cols() / 8;
     let cell_h = gray1.rows() / 8;
 
