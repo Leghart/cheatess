@@ -142,7 +142,7 @@ impl Stockfish {
         self.update_params(default_params);
     }
 
-    //TODO: fix for single player
+    //TODO: fix
     //TODO: add tests
     pub fn get_wdl_stats(&mut self) -> [usize; 3] {
         let fen_position = self.get_fen_position();
@@ -174,8 +174,7 @@ impl Stockfish {
         result
     }
 
-    // TODO: change result to String to be able return e.g. "M2"
-    pub fn get_evaluation(&mut self) -> f32 {
+    pub fn get_evaluation(&mut self) -> String {
         let fen_position = self.get_fen_position();
 
         let compare = if fen_position.contains('w') {
@@ -201,6 +200,7 @@ impl Stockfish {
             }
 
             if parts[0] == "info" {
+                println!("{parts:?}");
                 if let Some(score_index) = parts.iter().position(|&x| x == "score") {
                     if score_index + 2 < parts.len() {
                         let score_type = parts[score_index + 1];
@@ -214,7 +214,7 @@ impl Stockfish {
                             }
                             "mate" => {
                                 if let Ok(mate_val) = score_value.parse::<f32>() {
-                                    evaluation_mate = Some(mate_val * compare);
+                                    evaluation_mate = Some(mate_val);
                                 }
                             }
                             _ => {}
@@ -225,10 +225,16 @@ impl Stockfish {
         }
 
         if let Some(mate) = evaluation_mate {
-            return 10000.0 * mate.signum();
+            let sign = match mate.signum() {
+                1.0 => "".to_string(),
+                -1.0 => "-".to_string(),
+                _ => unreachable!(),
+            };
+            let abs = mate.abs() as usize;
+            return format!("{sign}M{abs}");
         }
 
-        evaluation_cp.unwrap_or(0.0) / 100.0
+        (evaluation_cp.unwrap_or(0.0) / 100.0).to_string()
     }
 
     pub fn set_skill_level(&mut self, level: usize) {
@@ -339,7 +345,6 @@ impl Stockfish {
         self.info = String::new();
     }
 
-    // TODO: after mate, returns None and panic
     fn get_move_from_proc(&mut self) -> Option<String> {
         let mut last_text = String::new();
 
@@ -865,7 +870,7 @@ mod tests {
 
         let eval = sf.get_evaluation();
 
-        assert!((eval - 0.42).abs() < 1e-6);
+        assert_eq!(eval, "0.42".to_string());
     }
 
     #[test]
@@ -877,14 +882,53 @@ mod tests {
 
         mock.push_read_line("Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1");
 
-        mock.push_read_line("info depth 10 score cp -37 nodes 12345");
+        mock.push_read_line("info depth 10 score cp 37 nodes 12345");
         mock.push_read_line("bestmove e7e5");
 
         let mut sf = Stockfish::new_with_process(Box::new(mock));
 
         let eval = sf.get_evaluation();
 
-        assert!((eval - 0.37).abs() < 1e-6);
+        assert_eq!(eval, "-0.37".to_string());
+    }
+
+    #[test]
+    fn get_evaluation_returns_mate_for_white() {
+        let mut mock = MockProcess::new();
+
+        mock.push_read_line("Stockfish 17 by Mock");
+        mock.push_read_line("readyok");
+
+        mock.push_read_line("Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+
+        mock.push_read_line("info depth 10 score cp 37 nodes 12345");
+        mock.push_read_line("info depth 11 score mate 2 nodes 13000");
+        mock.push_read_line("bestmove e2e4");
+
+        let mut sf = Stockfish::new_with_process(Box::new(mock));
+
+        let eval = sf.get_evaluation();
+
+        assert_eq!(eval, "M2".to_string());
+    }
+
+    #[test]
+    fn get_evaluation_returns_mate_for_black() {
+        let mut mock = MockProcess::new();
+
+        mock.push_read_line("Stockfish 17 by Mock");
+        mock.push_read_line("readyok");
+
+        mock.push_read_line("Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1");
+
+        mock.push_read_line("info depth 10 score mate -1 nodes 12345");
+        mock.push_read_line("bestmove e7e5");
+
+        let mut sf = Stockfish::new_with_process(Box::new(mock));
+
+        let eval = sf.get_evaluation();
+
+        assert_eq!(eval, "-M1".to_string());
     }
 
     #[test]
@@ -902,6 +946,6 @@ mod tests {
 
         let eval = sf.get_evaluation();
 
-        assert_eq!(eval, 0.0);
+        assert_eq!(eval, "0".to_string());
     }
 }

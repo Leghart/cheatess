@@ -5,6 +5,7 @@ use std::time::Instant;
 
 mod engine;
 mod monitor;
+mod printer;
 mod procimg;
 mod stockfish;
 
@@ -84,10 +85,16 @@ fn run() {
             >::new(new_raw_board)),
         };
         curr_board.print(&mut stdout);
-        let best_move = st.get_best_move().unwrap();
-        println!("Stockfish best move: {best_move}");
-        println!("---->{:?}", st.get_evaluation());
-        println!("====>{:?}", st.get_wdl_stats());
+        match st.get_best_move() {
+            Some(best) => {
+                println!("Stockfish best move: {best}");
+                println!("---->{:?}", st.get_evaluation());
+            }
+            None => {
+                println!("Game over");
+                break;
+            }
+        }
 
         prev_board_arr = curr_board;
         prev_board_mat = gray_board;
