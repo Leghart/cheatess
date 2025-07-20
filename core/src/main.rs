@@ -1,4 +1,5 @@
 use image::{imageops, DynamicImage};
+
 use logger::Logger;
 use std::io;
 use std::sync::Arc;
@@ -7,6 +8,7 @@ use std::time::Instant;
 mod engine;
 mod logger;
 mod monitor;
+mod parser;
 mod printer;
 mod procimg;
 mod stockfish;
@@ -18,17 +20,23 @@ fn main() {
 }
 
 fn run() {
-    logger::init(&logger::LevelFilter::Trace);
+    let env_args: Vec<String> = std::env::args().collect();
+    let args = parser::parse_args_from(env_args);
+
+    logger::init(&args.verbose.log_level_filter());
 
     clear_screen();
 
     let mut stdout = io::stdout();
-    let mut st =
-        stockfish::Stockfish::new("/home/leghart/projects/cheatess/stockfish-ubuntu-x86-64-avx2");
-    st.set_config();
-    st.set_elo_rating(2000);
+    let mut st = stockfish::Stockfish::new(&args.stockfish.path, args.stockfish.depth);
+    st.set_config(
+        &args.stockfish.elo.to_string(),
+        &args.stockfish.skill.to_string(),
+        &args.stockfish.hash.to_string(),
+    );
 
-    let monitor = monitor::select_monitor(true).expect("Primary monitor not found");
+    let monitor =
+        monitor::select_monitor(args.monitor.number).expect("Requested monitor not found");
     let raw = monitor::capture_entire_screen(&monitor);
     let dyn_image = DynamicImage::ImageRgba8(raw.clone());
     let entire_screen_gray = procimg::dynamic_image_to_gray_mat(&dyn_image).unwrap();
@@ -42,10 +50,20 @@ fn run() {
     let player_color = procimg::detect_player_color(&board);
     log::info!("Detected player color: {player_color:?}");
 
-    let base_board = engine::create_board::<engine::PrettyPrinter>(&player_color);
+    let base_board: Box<dyn engine::AnyBoard> = if args.engine.pretty_pieces {
+        engine::create_board_default::<engine::PrettyPrinter>(&player_color)
+    } else {
+        engine::create_board_default::<engine::DefaultPrinter>(&player_color)
+    };
     base_board.print(&mut stdout);
 
-    let pieces = procimg::extract_pieces(&board, &player_color).unwrap();
+    let pieces = procimg::extract_pieces(
+        &board,
+        args.proc_image.margin,
+        args.proc_image.extract_piece_threshold,
+        &player_color,
+    )
+    .unwrap();
     let pieces = pieces
         .into_iter()
         .map(|(c, mat)| (c, Arc::new(mat)))
@@ -67,7 +85,8 @@ fn run() {
             continue;
         }
 
-        let new_raw_board = procimg::find_all_pieces(&gray_board, &pieces);
+        let new_raw_board =
+            procimg::find_all_pieces(&gray_board, &pieces, args.proc_image.piece_threshold);
         log::trace!("Pieces detection: {:?}", start.elapsed());
 
         let detected_move =
@@ -84,15 +103,10 @@ fn run() {
             }
         }
 
-        let curr_board: Box<dyn engine::AnyBoard<engine::PrettyPrinter>> = match player_color {
-            engine::Color::White => Box::new(engine::Board::<
-                engine::PrettyPrinter,
-                engine::WhiteView,
-            >::new(new_raw_board)),
-            engine::Color::Black => Box::new(engine::Board::<
-                engine::PrettyPrinter,
-                engine::BlackView,
-            >::new(new_raw_board)),
+        let curr_board: Box<dyn engine::AnyBoard> = if args.engine.pretty_pieces {
+            engine::create_board_from_data::<engine::PrettyPrinter>(new_raw_board, &player_color)
+        } else {
+            engine::create_board_from_data::<engine::DefaultPrinter>(new_raw_board, &player_color)
         };
 
         curr_board.print(&mut stdout);

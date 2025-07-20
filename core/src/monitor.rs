@@ -2,11 +2,12 @@ use image::{ImageBuffer, Rgba};
 use xcap::Monitor;
 
 #[allow(clippy::if_same_then_else)]
-pub fn select_monitor(primary: bool) -> Result<Monitor, Box<dyn std::error::Error>> {
+pub fn select_monitor(primary: u8) -> Result<Monitor, Box<dyn std::error::Error>> {
     for m in Monitor::all().unwrap() {
-        if primary && m.is_primary().unwrap() {
+        if primary == 0 && m.is_primary().unwrap() {
             return Ok(m);
-        } else if !primary && !m.is_primary().unwrap() {
+        } else if primary != 0 && !m.is_primary().unwrap() {
+            //TODO: handle other monitors
             return Ok(m);
         }
     }
