@@ -16,7 +16,7 @@ pub struct RealProcess {
 }
 
 impl RealProcess {
-    pub fn new(exec_path: &str) -> Self {
+    pub fn new(exec_path: &std::path::PathBuf) -> Self {
         let proc = Popen::create(
             &[exec_path],
             PopenConfig {
@@ -91,16 +91,16 @@ pub struct Stockfish {
 
 #[allow(dead_code)]
 impl Stockfish {
-    pub fn new(exec_path: &str) -> Self {
+    pub fn new(exec_path: &std::path::PathBuf, depth: u8) -> Self {
         let real_proc = RealProcess::new(exec_path);
-        Self::new_with_process(Box::new(real_proc))
+        Self::new_with_process(Box::new(real_proc), depth)
     }
 
-    pub fn new_with_process(proc: Box<dyn Process>) -> Self {
+    pub fn new_with_process(proc: Box<dyn Process>, depth: u8) -> Self {
         let mut _self = Stockfish {
             proc,
             parameters: HashMap::new(),
-            depth: 5,
+            depth,
             info: String::new(),
             quit_sent: false,
             version: String::new(),
@@ -113,18 +113,18 @@ impl Stockfish {
         _self
     }
 
-    pub fn set_config(&mut self) {
+    pub fn set_config(&mut self, elo: &str, skill: &str, hash: &str) {
         let default_params: HashMap<&str, &str> = HashMap::from_iter([
             ("Debug Log File", ""),
             // ("Threads", "1"),
             ("Ponder", "false"),
-            ("Hash", "16"),
+            ("Hash", hash),
             ("MultiPV", "1"),
-            ("Skill Level", "20"),
+            ("Skill Level", skill),
             ("Move Overhead", "10"),
             ("UCI_Chess960", "false"),
             ("UCI_LimitStrength", "false"),
-            ("UCI_Elo", "1700"),
+            ("UCI_Elo", elo),
             ("UCI_ShowWDL", "true"),
         ]);
 
@@ -265,6 +265,7 @@ impl Stockfish {
         }
     }
 
+    // TODO: fix threads
     fn update_params(&mut self, new_param_values_p: HashMap<&str, &str>) {
         let mut new_param_values = new_param_values_p;
 
@@ -467,7 +468,7 @@ mod tests {
         mock.push_read_line("Stockfish 17 by Mock");
         mock.push_read_line("readyok");
 
-        let sf = Stockfish::new_with_process(Box::new(mock));
+        let sf = Stockfish::new_with_process(Box::new(mock), 1);
         assert_eq!(sf.version, "Stockfish 17 by Mock");
 
         let proc = sf.proc.as_any().downcast_ref::<MockProcess>().unwrap();
@@ -482,7 +483,7 @@ mod tests {
         mock.push_read_line("Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
         mock.push_read_line("readyok");
 
-        let mut sf = Stockfish::new_with_process(Box::new(mock));
+        let mut sf = Stockfish::new_with_process(Box::new(mock), 1);
 
         let fen = sf.get_fen_position();
 
@@ -503,7 +504,7 @@ mod tests {
         mock.push_read_line("info depth 10 score cp 20");
         mock.push_read_line("bestmove e2e4");
 
-        let mut sf = Stockfish::new_with_process(Box::new(mock));
+        let mut sf = Stockfish::new_with_process(Box::new(mock), 1);
 
         let best_move = sf.get_best_move();
 
@@ -525,7 +526,7 @@ mod tests {
         mock.push_read_line("bestmove e2e4");
         mock.push_read_line("readyok");
 
-        let mut sf = Stockfish::new_with_process(Box::new(mock));
+        let mut sf = Stockfish::new_with_process(Box::new(mock), 1);
 
         let best_move = sf.get_move_from_proc();
 
@@ -542,7 +543,7 @@ mod tests {
         mock.push_read_line("bestmove e2e4");
         mock.push_read_line("readyok");
 
-        let mut sf = Stockfish::new_with_process(Box::new(mock));
+        let mut sf = Stockfish::new_with_process(Box::new(mock), 1);
 
         let result = sf.is_correct_move("e2e4");
         assert!(result);
@@ -563,7 +564,7 @@ mod tests {
         mock.push_read_line("bestmove (none)");
         mock.push_read_line("readyok");
 
-        let mut sf = Stockfish::new_with_process(Box::new(mock));
+        let mut sf = Stockfish::new_with_process(Box::new(mock), 1);
 
         let result = sf.is_correct_move("a1a1");
         assert!(!result);
@@ -731,7 +732,7 @@ mod tests {
         mock.push_read_line("Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
         mock.push_read_line("readyok");
 
-        let mut sf = Stockfish::new_with_process(Box::new(mock));
+        let mut sf = Stockfish::new_with_process(Box::new(mock), 1);
         sf.set_elo_rating(2000);
 
         let proc = sf.proc.as_any().downcast_ref::<MockProcess>().unwrap();
@@ -761,7 +762,7 @@ mod tests {
         mock.push_read_line("Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
         mock.push_read_line("readyok");
 
-        let mut sf = Stockfish::new_with_process(Box::new(mock));
+        let mut sf = Stockfish::new_with_process(Box::new(mock), 1);
         let mut params = HashMap::new();
         params.insert("MyParam", "Value1");
         params.insert("Threads", "4");
@@ -803,7 +804,7 @@ mod tests {
         mock.push_read_line("Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
         mock.push_read_line("readyok");
 
-        let mut sf = Stockfish::new_with_process(Box::new(mock));
+        let mut sf = Stockfish::new_with_process(Box::new(mock), 1);
         sf.make_move(vec!["e2e4".to_string()]);
 
         let proc = sf.proc.as_any().downcast_ref::<MockProcess>().unwrap();
@@ -834,7 +835,7 @@ mod tests {
         mock.push_read_line("Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
         mock.push_read_line("readyok");
 
-        let mut sf = Stockfish::new_with_process(Box::new(mock));
+        let mut sf = Stockfish::new_with_process(Box::new(mock), 1);
         sf.make_move(vec!["d1d1".to_string()]);
     }
 
@@ -851,7 +852,7 @@ mod tests {
         mock.push_read_line("info depth 11 score cp 42 nodes 13000");
         mock.push_read_line("bestmove e2e4");
 
-        let mut sf = Stockfish::new_with_process(Box::new(mock));
+        let mut sf = Stockfish::new_with_process(Box::new(mock), 1);
 
         let eval = sf.get_evaluation();
 
@@ -870,7 +871,7 @@ mod tests {
         mock.push_read_line("info depth 10 score cp 37 nodes 12345");
         mock.push_read_line("bestmove e7e5");
 
-        let mut sf = Stockfish::new_with_process(Box::new(mock));
+        let mut sf = Stockfish::new_with_process(Box::new(mock), 1);
 
         let eval = sf.get_evaluation();
 
@@ -890,7 +891,7 @@ mod tests {
         mock.push_read_line("info depth 11 score mate 2 nodes 13000");
         mock.push_read_line("bestmove e2e4");
 
-        let mut sf = Stockfish::new_with_process(Box::new(mock));
+        let mut sf = Stockfish::new_with_process(Box::new(mock), 1);
 
         let eval = sf.get_evaluation();
 
@@ -909,7 +910,7 @@ mod tests {
         mock.push_read_line("info depth 10 score mate -1 nodes 12345");
         mock.push_read_line("bestmove e7e5");
 
-        let mut sf = Stockfish::new_with_process(Box::new(mock));
+        let mut sf = Stockfish::new_with_process(Box::new(mock), 1);
 
         let eval = sf.get_evaluation();
 
@@ -927,7 +928,7 @@ mod tests {
 
         mock.push_read_line("bestmove a1a1");
 
-        let mut sf = Stockfish::new_with_process(Box::new(mock));
+        let mut sf = Stockfish::new_with_process(Box::new(mock), 1);
 
         let eval = sf.get_evaluation();
 

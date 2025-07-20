@@ -62,6 +62,7 @@ pub fn show(image: &Mat, destroy: bool) -> Result<(), Box<dyn std::error::Error>
 pub fn find_all_pieces(
     gray_board: &Mat,
     pieces: &std::collections::HashMap<char, Arc<Mat>>,
+    piece_threshold: f64,
 ) -> [[char; 8]; 8] {
     let mut bin_board = Mat::default();
     imgproc::threshold(
@@ -84,7 +85,7 @@ pub fn find_all_pieces(
         let sign = *sign;
 
         let handle = thread::spawn(move || {
-            let local_result = find_piece_location(&board, &piece, 0.1, sign).unwrap();
+            let local_result = find_piece_location(&board, &piece, piece_threshold, sign).unwrap();
 
             let mut res = result_ref.lock().unwrap();
             for row in 0..8 {
@@ -341,6 +342,8 @@ pub fn are_images_different(gray1: &Mat, gray2: &Mat, threshold: i32) -> bool {
 
 pub fn extract_pieces(
     img: &Mat,
+    margin: u8,
+    extract_piece_threshold: f64,
     player_color: &Color,
 ) -> Result<std::collections::HashMap<char, Mat>, Box<dyn std::error::Error>> {
     let board_size: i32 = img.rows().min(img.cols());
@@ -367,7 +370,7 @@ pub fn extract_pieces(
         let h = y_edges[row + 1] - y;
 
         // Add a margin to the piece extraction area
-        let margin = 5;
+        let margin = margin as i32;
         let x = x + margin;
         let y = y + margin;
         let w = (w - 2 * margin).max(1);
@@ -377,7 +380,13 @@ pub fn extract_pieces(
         let piece = Mat::roi(img, roi)?;
 
         let mut bin_piece = Mat::default();
-        imgproc::threshold(&piece, &mut bin_piece, 127.0, 255.0, imgproc::THRESH_BINARY)?;
+        imgproc::threshold(
+            &piece,
+            &mut bin_piece,
+            extract_piece_threshold,
+            255.0,
+            imgproc::THRESH_BINARY,
+        )?;
         result.insert(*name, bin_piece);
     }
     Ok(result)

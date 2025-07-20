@@ -3,14 +3,16 @@
 // transform data to stockfish format etc.
 use std::io::Write;
 
-pub use super::printer::{AnyBoard, BlackView, PrettyPrinter, Printer, View, WhiteView};
+pub use super::printer::{
+    AnyBoard, BlackView, DefaultPrinter, PrettyPrinter, Printer, View, WhiteView,
+};
 
 pub struct Board<P: Printer, V: View> {
     pub raw: [[char; 8]; 8],
     printer: std::marker::PhantomData<(P, V)>,
 }
 
-impl<P: Printer, V: View> AnyBoard<P> for Board<P, V> {
+impl<P: Printer, V: View> AnyBoard for Board<P, V> {
     fn print(&self, writer: &mut dyn Write) {
         Board::print(self, writer);
     }
@@ -102,10 +104,20 @@ pub enum Color {
     Black,
 }
 
-pub fn create_board<P: Printer + 'static>(player_color: &Color) -> Box<dyn AnyBoard<P>> {
+pub fn create_board_default<P: Printer + 'static>(player_color: &Color) -> Box<dyn AnyBoard> {
     match player_color {
         Color::White => Box::new(Board::<P, WhiteView>::default_white()),
         Color::Black => Box::new(Board::<P, BlackView>::default_black()),
+    }
+}
+
+pub fn create_board_from_data<P: Printer + 'static>(
+    data: [[char; 8]; 8],
+    player_color: &Color,
+) -> Box<dyn AnyBoard> {
+    match player_color {
+        Color::White => Box::new(Board::<P, WhiteView>::new(data)),
+        Color::Black => Box::new(Board::<P, BlackView>::new(data)),
     }
 }
 
@@ -268,7 +280,10 @@ pub fn detect_move(
             from = Some((_from.row, _from.col));
             move_type = MoveType::Castle;
         }
-        _ => unreachable!(),
+        x => {
+            log::error!("{x}");
+            return Err("invalid amount of moves".into());
+        }
     }
 
     if let (Some((from_row, from_col)), Some((to_row, to_col))) = (from, to) {
@@ -312,8 +327,8 @@ mod tests {
                 ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
                 ['r', 'n', 'b', 'k', 'q', 'b', 'n', 'r']
             ])]
-    fn check_create_board(#[case] player_color: Color, #[case] result: [[char; 8]; 8]) {
-        let board = create_board::<DefaultPrinter>(&player_color);
+    fn check_create_board_default(#[case] player_color: Color, #[case] result: [[char; 8]; 8]) {
+        let board = create_board_default::<DefaultPrinter>(&player_color);
         assert_eq!(*board.raw(), result);
     }
 
