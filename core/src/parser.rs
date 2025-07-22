@@ -1,5 +1,5 @@
 use clap::Parser;
-use clap::{Args, FromArgMatches, Subcommand};
+use clap::{Args, FromArgMatches, Subcommand, ValueEnum};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 
 #[derive(Parser, Debug, Clone)]
@@ -7,6 +7,9 @@ use clap_verbosity_flag::{InfoLevel, Verbosity};
 struct RawArgs {
     #[command(subcommand)]
     subparser: Option<Subparser>,
+
+    #[arg(short, long, default_value_t = Mode::Game)]
+    pub mode: Mode,
 
     #[clap(flatten)]
     pub verbose: Verbosity<InfoLevel>,
@@ -35,7 +38,7 @@ pub struct StockfishArgs {
     )]
     pub path: std::path::PathBuf,
 
-    #[arg(short, long, default_value_t = 2000)]
+    #[arg(short, long, default_value_t = 1700)]
     pub elo: usize,
 
     #[arg(short, long, default_value_t = 20)]
@@ -44,7 +47,7 @@ pub struct StockfishArgs {
     #[arg(short, long, default_value_t = 5)]
     pub depth: u8,
 
-    #[arg(short, long, default_value_t = 16)]
+    #[arg(short, long, default_value_t = 128)]
     pub hash: usize,
 }
 
@@ -58,6 +61,9 @@ pub struct ImgProcArgs {
 
     #[arg(short, long, default_value_t = 127.0)]
     pub extract_piece_threshold: f64,
+
+    #[arg(short, long, default_value_t = 100.0)]
+    pub board_threshold: f64,
 }
 
 #[derive(Debug, Clone, Parser)]
@@ -66,9 +72,27 @@ pub struct EngineArgs {
     pub pretty_pieces: bool,
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, ValueEnum, Default)]
+pub enum Mode {
+    #[default]
+    Game,
+    Test,
+}
+
+impl std::fmt::Display for Mode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Mode::Game => "game",
+            Mode::Test => "test",
+        };
+        write!(f, "{s}")
+    }
+}
+
 #[derive(Debug)]
 pub struct CheatessArgs {
     pub verbose: Verbosity<InfoLevel>,
+    pub mode: Mode,
     pub monitor: MonitorArgs,
     pub stockfish: StockfishArgs,
     pub proc_image: ImgProcArgs,
@@ -118,6 +142,7 @@ pub fn parse_args_from<I: IntoIterator<Item = T>, T: Into<String>>(iterator: I) 
         proc_image: proc_image.expect("ImgProc hasn't been extracted"),
         engine: engine.expect("Engine hasn't been extracted"),
         verbose: args.verbose,
+        mode: args.mode,
     }
 }
 
