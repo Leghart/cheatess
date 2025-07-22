@@ -72,16 +72,11 @@ pub struct EngineArgs {
     pub pretty_pieces: bool,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, ValueEnum)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, ValueEnum, Default)]
 pub enum Mode {
+    #[default]
     Game,
     Test,
-}
-
-impl Default for Mode {
-    fn default() -> Self {
-        Mode::Game
-    }
 }
 
 impl std::fmt::Display for Mode {

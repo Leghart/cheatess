@@ -78,16 +78,7 @@ pub fn find_all_pieces(
     piece_threshold: f64,
     board_threshold: f64,
 ) -> [[char; 8]; 8] {
-    // let mut bin_board = Mat::default();
-    // imgproc::threshold(
-    //     &gray_board,
-    //     &mut bin_board,
-    //     board_threshold,
-    //     255.0,
-    //     imgproc::THRESH_BINARY,
-    // )
-    // .unwrap();
-    let bin_board = convert_board_to_bin(&gray_board, board_threshold);
+    let bin_board = convert_board_to_bin(gray_board, board_threshold);
 
     let result = Arc::new(Mutex::new([[' '; 8]; 8]));
     let bin_board = Arc::new(bin_board);

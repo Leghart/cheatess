@@ -169,7 +169,7 @@ fn config_mode(args: parser::CheatessArgs) -> Result<(), Box<dyn std::error::Err
     )?;
 
     for (sign, mat) in &pieces {
-        procimg::show(&mat, true, &format!("Extracted piece: {sign}"))?;
+        procimg::show(mat, true, &format!("Extracted piece: {sign}"))?;
     }
 
     log::info!("Binary board");
