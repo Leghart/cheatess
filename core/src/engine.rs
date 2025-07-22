@@ -245,12 +245,16 @@ pub fn detect_move(
                             move_type = MoveType::Capture;
                         } else {
                             move_type = MoveType::PromotionCapture;
+                            let x = coords_to_position(_from.row, _from.col, player_color);
+                            let y = coords_to_position(diff.row, diff.col, player_color);
+                            let new_piece = diff.piece_after.to_lowercase();
+                            return Ok((format!("{x}{y}{new_piece}"), move_type));
                         }
                     }
                 }
             }
         }
-        //en pasoint
+        //en passant
         3 => {
             let _to = changed_moves
                 .iter()
@@ -281,8 +285,7 @@ pub fn detect_move(
             move_type = MoveType::Castle;
         }
         x => {
-            log::error!("{x}");
-            return Err("invalid amount of moves".into());
+            return Err(format!("invalid amount of moves: {x}").into());
         }
     }
 
@@ -546,7 +549,7 @@ mod tests {
         [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
         ['P', ' ', 'P', ' ', ' ', 'P', ' ', 'P'],
         ['R', 'N', ' ', 'Q', 'K', 'B', 'N', 'R'],
-    ],"d7c8".to_string(), Color::White)]
+    ],"d7c8q".to_string(), Color::White)]
     #[case([
         ['R', 'N', ' ', 'K', 'Q', 'B', 'N', 'R'],
         ['P', 'P', 'p', 'P', 'P', ' ', 'P', 'P'],
@@ -565,7 +568,7 @@ mod tests {
         [' ', ' ', ' ', ' ', 'P', ' ', ' ', ' '],
         ['p', ' ', 'p', 'p', 'p', 'p', 'p', 'p'],
         ['r', 'n', 'b', ' ', 'q', 'k', ' ', ' ']
-    ],"f2g1".to_string(),Color::Black)]
+    ],"f2g1q".to_string(),Color::Black)]
     fn detect_move_promotion_with_capture(
         #[case] before_move: [[char; 8]; 8],
         #[case] after_move: [[char; 8]; 8],
