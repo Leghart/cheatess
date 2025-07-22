@@ -123,7 +123,7 @@ impl Stockfish {
             ("Skill Level", skill),
             ("Move Overhead", "10"),
             ("UCI_Chess960", "false"),
-            ("UCI_LimitStrength", "false"),
+            ("UCI_LimitStrength", "true"),
             ("UCI_Elo", elo),
             ("UCI_ShowWDL", "true"),
         ]);

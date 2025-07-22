@@ -1,6 +1,6 @@
 use super::engine::{register_piece, Color};
+use image::{ImageBuffer, Rgba};
 
-use image::DynamicImage;
 use opencv::{core::Mat, imgproc};
 use opencv::{
     core::{min_max_loc, Point, Rect, Scalar, CV_8UC1, CV_8UC4},
@@ -41,18 +41,31 @@ static BLACK_NAMED_FIELDS: [((usize, usize), char); 12] = [
     ((4, 7), 'q'),
 ];
 
-#[allow(dead_code)]
-pub fn show(image: &Mat, destroy: bool) -> Result<(), Box<dyn std::error::Error>> {
-    highgui::imshow("test_window", &image)?;
+pub fn show(image: &Mat, destroy: bool, title: &str) -> Result<(), Box<dyn std::error::Error>> {
+    highgui::imshow(title, &image)?;
     loop {
         if highgui::wait_key(0)? == 48 {
             break;
         }
     }
     if destroy {
-        destroy_window("test_window")?;
+        destroy_window(title)?;
     }
     Ok(())
+}
+
+pub fn convert_board_to_bin(gray_board: &Mat, board_threshold: f64) -> Mat {
+    let mut bin_board = Mat::default();
+    imgproc::threshold(
+        &gray_board,
+        &mut bin_board,
+        board_threshold,
+        255.0,
+        imgproc::THRESH_BINARY,
+    )
+    .unwrap();
+
+    bin_board
 }
 
 /// Finds all chess pieces on the board by performing template matching for each piece.
@@ -63,16 +76,9 @@ pub fn find_all_pieces(
     gray_board: &Mat,
     pieces: &std::collections::HashMap<char, Arc<Mat>>,
     piece_threshold: f64,
+    board_threshold: f64,
 ) -> [[char; 8]; 8] {
-    let mut bin_board = Mat::default();
-    imgproc::threshold(
-        &gray_board,
-        &mut bin_board,
-        100.0,
-        255.0,
-        imgproc::THRESH_BINARY,
-    )
-    .unwrap();
+    let bin_board = convert_board_to_bin(gray_board, board_threshold);
 
     let result = Arc::new(Mutex::new([[' '; 8]; 8]));
     let bin_board = Arc::new(bin_board);
@@ -392,15 +398,14 @@ pub fn extract_pieces(
     Ok(result)
 }
 
-pub fn dynamic_image_to_gray_mat(img: &DynamicImage) -> opencv::Result<Mat> {
-    let rgba8 = img.to_rgba8();
-    let (width, height) = rgba8.dimensions();
+pub fn image_buffer_to_gray_mat(img: &ImageBuffer<Rgba<u8>, Vec<u8>>) -> opencv::Result<Mat> {
+    let (width, height) = img.dimensions();
 
     let mut mat =
         Mat::new_rows_cols_with_default(height as i32, width as i32, CV_8UC4, Scalar::all(0.0))?;
 
     let mat_data = mat.data_bytes_mut()?;
-    mat_data.copy_from_slice(rgba8.as_raw());
+    mat_data.copy_from_slice(img.as_raw());
 
     let mut gray_mat = Mat::default();
     imgproc::cvt_color(&mat, &mut gray_mat, imgproc::COLOR_RGBA2GRAY, 0)?;
@@ -410,7 +415,7 @@ pub fn dynamic_image_to_gray_mat(img: &DynamicImage) -> opencv::Result<Mat> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use image::{imageops, DynamicImage};
+    use image::imageops;
     use opencv::{imgcodecs, imgproc};
 
     #[test]
@@ -445,8 +450,7 @@ mod tests {
         let cropped =
             imageops::crop_imm(&rgba_image, coords.0, coords.1, coords.2, coords.3).to_image();
 
-        let dyn_image = DynamicImage::ImageRgba8(cropped);
-        let final_mat = dynamic_image_to_gray_mat(&dyn_image).unwrap();
+        let final_mat = image_buffer_to_gray_mat(&cropped).unwrap();
 
         assert_eq!(final_mat.size().unwrap(), ref_mat.size().unwrap());
         assert_eq!(final_mat.typ(), ref_mat.typ());
