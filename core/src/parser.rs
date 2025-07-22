@@ -85,7 +85,7 @@ impl std::fmt::Display for Mode {
             Mode::Game => "game",
             Mode::Test => "test",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
