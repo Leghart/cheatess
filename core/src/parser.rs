@@ -47,7 +47,7 @@ pub struct StockfishArgs {
     #[arg(short, long, default_value_t = 5)]
     pub depth: u8,
 
-    #[arg(short, long, default_value_t = 128)]
+    #[arg(long, default_value_t = 16)]
     pub hash: usize,
 }
 
@@ -64,12 +64,15 @@ pub struct ImgProcArgs {
 
     #[arg(short, long, default_value_t = 100.0)]
     pub board_threshold: f64,
+
+    #[arg(short, long, default_value_t = 500)]
+    pub difference_level: i32,
 }
 
 #[derive(Debug, Clone, Parser)]
 pub struct EngineArgs {
     #[arg(short, long, default_value_t = false)]
-    pub pretty_pieces: bool,
+    pub pretty: bool,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, ValueEnum, Default)]
