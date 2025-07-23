@@ -7,6 +7,10 @@
 
 This is the core logic of the Cheatess project. It allows you to run the application directly from the terminal, play as either white or black, and analyze a live chessboard in real time by monitoring your screen and displaying the best moves based on a preconfigured Stockfish engine.
 
+<div align="center">
+  <img src="images/demo.gif" width="600"/>
+</div>
+
 ---
 
 ## Table of Contents
