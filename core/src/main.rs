@@ -54,7 +54,7 @@ fn game(args: parser::CheatessArgs) {
     let player_color = procimg::detect_player_color(&board);
     log::info!("Detected player color: {player_color:?}");
 
-    let base_board: Box<dyn engine::AnyBoard> = if args.engine.pretty_pieces {
+    let base_board: Box<dyn engine::AnyBoard> = if args.engine.pretty {
         engine::create_board_default::<engine::PrettyPrinter>(&player_color)
     } else {
         engine::create_board_default::<engine::DefaultPrinter>(&player_color)
@@ -85,7 +85,11 @@ fn game(args: parser::CheatessArgs) {
         let gray_board = procimg::image_buffer_to_gray_mat(&cropped).unwrap(); // ~20ms
         log::trace!("image preparation: {:?}", start.elapsed());
 
-        if !procimg::are_images_different(&prev_board_mat, &gray_board, 500) {
+        if !procimg::are_images_different(
+            &prev_board_mat,
+            &gray_board,
+            args.proc_image.difference_level,
+        ) {
             continue;
         }
 
@@ -112,7 +116,7 @@ fn game(args: parser::CheatessArgs) {
         }
         clear_screen();
 
-        let curr_board: Box<dyn engine::AnyBoard> = if args.engine.pretty_pieces {
+        let curr_board: Box<dyn engine::AnyBoard> = if args.engine.pretty {
             engine::create_board_from_data::<engine::PrettyPrinter>(new_raw_board, &player_color)
         } else {
             engine::create_board_from_data::<engine::DefaultPrinter>(new_raw_board, &player_color)
@@ -137,12 +141,15 @@ fn game(args: parser::CheatessArgs) {
 }
 
 fn config_mode(args: parser::CheatessArgs) -> Result<(), Box<dyn std::error::Error>> {
+    log::info!("Welcome to the interactive test setup for cheatess. Follow the instructions to ensure everything works correctly while playing.");
+
+    log::info!("\n[Step 1/7] Collected invoke parameters:");
     log::info!("{:?}", args.monitor);
     log::info!("{:?}", args.engine);
     log::info!("{:?}", args.proc_image);
     log::info!("{:?}", args.stockfish);
 
-    log::info!("\nNow you will see the following images: entire screen in grayscale, cropped board from previus image,...");
+    log::info!("\n[Step 2/7] Now you will see the following images: entire screen in grayscale and cropped board from previus image");
     log::info!("To get next image, press '0'");
 
     let monitor =
@@ -157,10 +164,10 @@ fn config_mode(args: parser::CheatessArgs) -> Result<(), Box<dyn std::error::Err
     procimg::show(&board, true, "Cropped board")?;
 
     let player_color = procimg::detect_player_color(&board);
-    log::warn!("\nDetected player color: {player_color:?}");
+    log::warn!("\n[Step 3/7] Detected player color: {player_color:?}");
 
-    log::info!("\nNow you will see all extracted pieces from board, please check if everyone is clear and has high resolution");
-    log::info!("If image is bad, you can improve it by change proc_image arguments: margin and extract_piece_threshold");
+    log::info!("\n[Step 4/7] Now you will see all extracted pieces from board, please check if every is clear");
+    log::info!("If image is bad, you can improve it by change imgproc arguments: margin (-m) and extract_piece_threshold (-e)");
     let pieces = procimg::extract_pieces(
         &board,
         args.proc_image.margin,
@@ -172,11 +179,11 @@ fn config_mode(args: parser::CheatessArgs) -> Result<(), Box<dyn std::error::Err
         procimg::show(mat, true, &format!("Extracted piece: {sign}"))?;
     }
 
-    log::info!("Binary board");
+    log::info!("[Step 5/7] Now you will see board converted to binary...");
     let bin_board = procimg::convert_board_to_bin(&board, args.proc_image.board_threshold);
     procimg::show(&bin_board, true, "Binary board")?;
 
-    log::info!("Last step, check if every piece is correctly placed");
+    log::info!("[Step 6/7] Now check if every piece is correctly placed");
     let pieces = pieces
         .into_iter()
         .map(|(c, mat)| (c, Arc::new(mat)))
@@ -189,12 +196,39 @@ fn config_mode(args: parser::CheatessArgs) -> Result<(), Box<dyn std::error::Err
         args.proc_image.board_threshold,
     );
 
-    let board: Box<dyn engine::AnyBoard> = if args.engine.pretty_pieces {
+    let calc_board: Box<dyn engine::AnyBoard> = if args.engine.pretty {
         engine::create_board_from_data::<engine::PrettyPrinter>(raw_board, &player_color)
     } else {
         engine::create_board_from_data::<engine::DefaultPrinter>(raw_board, &player_color)
     };
-    board.print(&mut io::stdout());
+    calc_board.print(&mut io::stdout());
+
+    log::info!("[Step 7/7] Last step, make any move on your web board and check if move detection is correct (you can configure it with -d flag)");
+    log::info!("If you make an exactly one move, press enter...");
+    io::stdin().read_line(&mut String::new())?;
+
+    let prev_board = board;
+    let prev_board_arr = calc_board;
+    let new_cropped = monitor::get_cropped_screen(&monitor, coords.0, coords.1, coords.2, coords.3);
+    let new_board = procimg::image_buffer_to_gray_mat(&new_cropped).unwrap();
+
+    if !procimg::are_images_different(&prev_board, &new_board, args.proc_image.difference_level) {
+        log::error!("Not detected the move");
+        return Err("Not detected the move".into());
+    }
+
+    let new_raw_board = procimg::find_all_pieces(
+        &new_board,
+        &pieces,
+        args.proc_image.piece_threshold,
+        args.proc_image.board_threshold,
+    );
+
+    let (detected_move, _) =
+        engine::detect_move(prev_board_arr.raw(), &new_raw_board, &player_color)
+            .expect("Not found a move");
+
+    log::info!("Detected move: {detected_move}");
 
     Ok(())
 }
