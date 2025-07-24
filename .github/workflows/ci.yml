@@ -1,27 +1,17 @@
 on: [pull_request]
 
 name: CI
-# TODO: optimize with prepared image with all required packages
+
 jobs:
   check:
     name: Check
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        rust:
-          - stable
+    container:
+      image: leghart/cheatess:0.1.0
+
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
-
-      - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libopencv-dev libwayland-dev pkg-config libpipewire-0.3-dev libegl-dev
-
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: ${{ matrix.rust }}
-          override: true
 
       - name: Run cargo check
         run: cargo check
@@ -30,18 +20,12 @@ jobs:
   test:
     name: Run test suite
     runs-on: ubuntu-latest
+    container:
+      image: leghart/cheatess:0.1.0
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-
-      - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libopencv-dev libwayland-dev pkg-config libpipewire-0.3-dev libegl-dev libgbm-dev
-
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
 
       - name: Run cargo test
         run: cargo test
@@ -50,25 +34,12 @@ jobs:
   fmt:
     name: Rustfmt
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        rust:
-          - stable
+    container:
+      image: leghart/cheatess:0.1.0
+
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
-
-      - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libopencv-dev libwayland-dev pkg-config libpipewire-0.3-dev libegl-dev
-
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: ${{ matrix.rust }}
-          override: true
-
-      - name: Install rustfmt
-        run: rustup component add rustfmt
 
       - name: Run cargo fmt
         run: cargo fmt --all -- --check
@@ -77,25 +48,12 @@ jobs:
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        rust:
-          - stable
+    container:
+      image: leghart/cheatess:0.1.0
+
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
-
-      - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libopencv-dev libwayland-dev pkg-config libpipewire-0.3-dev libegl-dev
-
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: ${{ matrix.rust }}
-          override: true
-
-      - name: Install clippy
-        run: rustup component add clippy
 
       - name: Run cargo clippy
         run: cargo clippy -- -D warnings

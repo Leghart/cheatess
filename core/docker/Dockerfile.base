@@ -1,0 +1,31 @@
+FROM rust:slim as builder
+
+RUN apt-get update && apt-get install -y \
+    libopencv-dev libwayland-dev pkg-config libpipewire-0.3-dev libegl-dev libgbm-dev clang llvm-dev \
+ && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+RUN rustup component add rustfmt clippy
+
+COPY src /workspace/src
+COPY templates /workspace/templates
+COPY Cargo.* /workspace
+
+WORKDIR /workspace
+
+RUN cargo test --no-run
+
+FROM rust:slim
+
+RUN apt-get update && apt-get install -y \
+    libopencv-dev libwayland-dev pkg-config libpipewire-0.3-dev libegl-dev libgbm-dev clang llvm-dev \
+ && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+RUN rustup component add rustfmt clippy
+
+WORKDIR /workspace
+
+COPY --from=builder /workspace /workspace
+COPY --from=builder /workspace/target /workspace/target
+COPY --from=builder /usr/local/cargo /usr/local/cargo
+
+CMD ["/bin/bash"]
