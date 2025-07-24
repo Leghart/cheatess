@@ -3,7 +3,7 @@ use clap::{Args, FromArgMatches, Subcommand, ValueEnum};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 
 #[derive(Parser, Debug, Clone)]
-#[clap(author = "Dawid Sieluzycki @Leghart", version = "1.0.0", about)]
+#[clap(author = "Dawid Sieluzycki @Leghart", version = "0.1.0", about)]
 struct RawArgs {
     #[command(subcommand)]
     subparser: Option<Subparser>,
