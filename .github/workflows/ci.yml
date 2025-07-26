@@ -18,7 +18,7 @@ jobs:
         working-directory: core
 
   test:
-    name: Run test suite
+    name: Tests
     runs-on: ubuntu-latest
     container:
       image: leghart/cheatess:0.1.0
@@ -32,7 +32,7 @@ jobs:
         working-directory: core
 
   fmt:
-    name: Rustfmt
+    name: Format
     runs-on: ubuntu-latest
     container:
       image: leghart/cheatess:0.1.0
@@ -46,7 +46,7 @@ jobs:
         working-directory: core
 
   clippy:
-    name: Clippy
+    name: Lint
     runs-on: ubuntu-latest
     container:
       image: leghart/cheatess:0.1.0
