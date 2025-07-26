@@ -19,6 +19,13 @@ jobs:
           changed_files=$(git diff --name-only origin/develop...HEAD)
           echo "Changed files: $changed_files"
           echo "::set-output name=changed::$(echo $changed_files | grep -E 'Cargo.toml|Cargo.lock' || true)"
+      
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}      
+
       - name: Build Docker if needed
         if: steps.check_cargo.outputs.changed != ''
         uses: docker/build-push-action@v5
