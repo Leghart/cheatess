@@ -3,7 +3,7 @@
 // transform data to stockfish format etc.
 use std::io::Write;
 
-pub use super::printer::{
+pub use crate::utils::printer::{
     AnyBoard, BlackView, DefaultPrinter, PrettyPrinter, Printer, View, WhiteView,
 };
 

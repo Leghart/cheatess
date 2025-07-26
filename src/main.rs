@@ -1,9 +1,9 @@
 use image::imageops;
 
-use logger::Logger;
 use std::io;
 use std::sync::Arc;
 use std::time::Instant;
+use utils::logger::Logger;
 
 mod core;
 mod utils;
@@ -40,7 +40,7 @@ fn game(args: utils::parser::CheatessArgs) {
     let monitor =
         utils::monitor::select_monitor(args.monitor.number).expect("Requested monitor not found");
     let raw = utils::monitor::capture_entire_screen(&monitor);
-    let entire_screen_gray = procimg::image_buffer_to_gray_mat(&raw).unwrap();
+    let entire_screen_gray = core::procimg::image_buffer_to_gray_mat(&raw).unwrap();
     let coords = core::procimg::get_board_region(&entire_screen_gray);
 
     let cropped = imageops::crop_imm(&raw, coords.0, coords.1, coords.2, coords.3).to_image();
@@ -112,7 +112,7 @@ fn game(args: utils::parser::CheatessArgs) {
         }
         clear_screen();
 
-        let curr_board: Box<dyn engine::AnyBoard> = if args.engine.pretty {
+        let curr_board: Box<dyn core::engine::AnyBoard> = if args.engine.pretty {
             core::engine::create_board_from_data::<core::engine::PrettyPrinter>(
                 new_raw_board,
                 &player_color,
@@ -198,7 +198,7 @@ fn config_mode(args: utils::parser::CheatessArgs) -> Result<(), Box<dyn std::err
         args.proc_image.board_threshold,
     );
 
-    let calc_board: Box<dyn engine::AnyBoard> = if args.engine.pretty {
+    let calc_board: Box<dyn core::engine::AnyBoard> = if args.engine.pretty {
         core::engine::create_board_from_data::<core::engine::PrettyPrinter>(
             raw_board,
             &player_color,
