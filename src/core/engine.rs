@@ -301,7 +301,7 @@ pub fn detect_move(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::printer::DefaultPrinter;
+    use crate::utils::printer::DefaultPrinter;
     use rstest::{fixture, rstest};
 
     #[fixture]
