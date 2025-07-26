@@ -40,7 +40,7 @@ fn game(args: utils::parser::CheatessArgs) {
     let entire_screen_gray = core::procimg::image_buffer_to_gray_mat(&raw).unwrap();
     let coords = core::procimg::get_board_region(&entire_screen_gray);
 
-    let cropped = core::procimg::crop_image(&raw, &coords).to_image();
+    let cropped = core::procimg::crop_image(&raw, &coords);
     let board = core::procimg::image_buffer_to_gray_mat(&cropped).unwrap();
 
     let player_color = core::procimg::detect_player_color(&board);
@@ -158,7 +158,7 @@ fn config_mode(args: utils::parser::CheatessArgs) -> Result<(), Box<dyn std::err
     core::procimg::show(&entire_screen_gray, true, "Entire screen")?;
 
     let coords = core::procimg::get_board_region(&entire_screen_gray);
-    let cropped = core::procimg::crop_image(&raw, &coords).to_image();
+    let cropped = core::procimg::crop_image(&raw, &coords);
     let board = core::procimg::image_buffer_to_gray_mat(&cropped).unwrap();
     core::procimg::show(&board, true, "Cropped board")?;
 
