@@ -412,7 +412,7 @@ pub fn image_buffer_to_gray_mat(img: &ImageBuffer<Rgba<u8>, Vec<u8>>) -> opencv:
     Ok(gray_mat)
 }
 
-pub fn crop_image(raw: &Mat, coords: &(u32, u32, u32, u32)) -> ImageBuffer<Rgba<u8>, Vec<_>> {
+pub fn crop_image(raw: &Mat, coords: &(u32, u32, u32, u32)) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
     imageops::crop_imm(&raw, coords.0, coords.1, coords.2, coords.3).to_image()
 }
 
