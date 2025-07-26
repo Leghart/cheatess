@@ -416,7 +416,7 @@ pub fn crop_image(
     raw: &ImageBuffer<Rgba<u8>, Vec<u8>>,
     coords: &(u32, u32, u32, u32),
 ) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
-    imageops::crop_imm(&raw, coords.0, coords.1, coords.2, coords.3).to_image()
+    imageops::crop_imm(raw, coords.0, coords.1, coords.2, coords.3).to_image()
 }
 
 #[cfg(test)]
