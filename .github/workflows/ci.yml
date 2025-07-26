@@ -2,6 +2,9 @@ on: [pull_request]
 
 name: CI
 
+env:
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/cheatess-test:latest
+
 jobs:
   prepare_image:
     name: Build Test Image
