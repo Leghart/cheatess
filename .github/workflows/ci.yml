@@ -2,59 +2,67 @@ on: [pull_request]
 
 name: CI
 
+env:
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/cheatess-test:latest
+
 jobs:
+  prepare_image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Check changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v34
+        with:
+          files: |
+            Cargo.toml
+            Cargo.lock
+      - name: Build Docker image if needed
+        if: contains(steps.changed-files.outputs.files, 'Cargo.toml') || contains(steps.changed-files.outputs.files, 'Cargo.lock')
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile.test
+          push: true
+          tags: ${{ env.IMAGE_NAME }}
+
   check:
     name: Check
     runs-on: ubuntu-latest
     container:
-      image: leghart/cheatess:0.1.0
-
+      image: leghart/cheatess-test:latest
+    needs: [prepare_image]
     steps:
-      - name: Checkout sources
-        uses: actions/checkout@v2
-
-      - name: Run cargo check
-        run: cargo check
-        working-directory: core
+      - uses: actions/checkout@v2
+      - run: cargo check
 
   test:
-    name: Run test suite
+    name: Tests
     runs-on: ubuntu-latest
     container:
-      image: leghart/cheatess:0.1.0
-
+      image: leghart/cheatess-test:latest
+    needs: [prepare_image]
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
+      - uses: actions/checkout@v2
+      - run: cargo test
 
-      - name: Run cargo test
-        run: cargo test
-        working-directory: core
 
   fmt:
-    name: Rustfmt
+    name: Format
     runs-on: ubuntu-latest
     container:
-      image: leghart/cheatess:0.1.0
-
+      image: leghart/cheatess-test:latest
+    needs: [prepare_image]
     steps:
-      - name: Checkout sources
-        uses: actions/checkout@v2
-
-      - name: Run cargo fmt
-        run: cargo fmt --all -- --check
-        working-directory: core
+      - uses: actions/checkout@v2
+      - run: cargo fmt --all -- --check
 
   clippy:
-    name: Clippy
+    name: Lint
     runs-on: ubuntu-latest
     container:
-      image: leghart/cheatess:0.1.0
-
+      image: leghart/cheatess-test:latest
+    needs: [prepare_image]
     steps:
-      - name: Checkout sources
-        uses: actions/checkout@v2
-
-      - name: Run cargo clippy
-        run: cargo clippy -- -D warnings
-        working-directory: core
+      - uses: actions/checkout@v2
+      - run: cargo clippy -- -D warnings

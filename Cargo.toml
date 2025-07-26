@@ -17,3 +17,16 @@ xcap = { version = "0.6.1", default-features = false }
 rstest = "0.24.0"
 opencv = { version = "0.94.2", default-features = false, features = ["imgcodecs"] }
 clippy = "0.0.302"
+
+[profile.dev]
+codegen-units = 256
+incremental = true
+opt-level = 0
+
+[profile.release]
+codegen-units = 1
+debug = false
+lto = "fat"
+opt-level = 3
+panic = "abort"
+strip = true

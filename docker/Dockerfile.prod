@@ -1,0 +1,37 @@
+# TODO!: handle monitor select somehow
+FROM rust:slim as builder
+
+RUN apt-get update && apt-get install -y \
+    pkg-config libwayland-dev libpipewire-0.3-dev \
+    libclang-dev libegl-dev libopencv-dev libgbm-dev \
+    clang llvm-dev libx11-dev \
+    && apt-get clean && rm -rf /var/lib/apt/lists/* 
+
+WORKDIR /workspace
+
+COPY src ./src
+COPY Cargo.toml Cargo.lock ./
+
+RUN cargo build --release
+
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC
+ENV LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu/
+
+RUN apt-get update && apt-get install -y \
+    libqt5opengl5 libqt5core5a libqt5gui5 libqt5widgets5 libqt5test5 \
+    libopencv-dev libx11-6 libx11-dev libglib2.0-0 libgtk-3-0 libwayland-client0 \
+    libwayland-cursor0 libwayland-egl1 libwayland-server0 \
+    libegl1-mesa libgbm1 libpipewire-0.3-0 pkg-config ca-certificates \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY --from=builder /workspace/target/release/cheatess-core ./cheatess-core
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libopencv_*.so* /usr/lib/x86_64-linux-gnu/
+
+COPY stockfish-ubuntu-x86-64-avx2 ./
+
+# CMD ["./cheatess-core"]
+CMD ["/bin/bash"]

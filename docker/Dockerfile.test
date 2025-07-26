@@ -1,8 +1,16 @@
 FROM rust:slim as builder
 
 RUN apt-get update && apt-get install -y \
-    libopencv-dev libwayland-dev pkg-config libpipewire-0.3-dev libegl-dev libgbm-dev clang llvm-dev \
- && apt-get clean && rm -rf /var/lib/apt/lists/*
+    pkg-config \
+    libwayland-dev \
+    libpipewire-0.3-dev \
+    libclang-dev \
+    libegl-dev \
+    libopencv-dev \
+    libgbm-dev \
+    clang \
+    llvm-dev \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN rustup component add rustfmt clippy
 
@@ -17,8 +25,16 @@ RUN cargo test --no-run
 FROM rust:slim
 
 RUN apt-get update && apt-get install -y \
-    libopencv-dev libwayland-dev pkg-config libpipewire-0.3-dev libegl-dev libgbm-dev clang llvm-dev \
- && apt-get clean && rm -rf /var/lib/apt/lists/*
+    pkg-config \
+    libwayland-dev \
+    libpipewire-0.3-dev \
+    libclang-dev \
+    libegl-dev \
+    libopencv-dev \
+    libgbm-dev \
+    clang \
+    llvm-dev \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN rustup component add rustfmt clippy
 
