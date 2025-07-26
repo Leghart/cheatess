@@ -9,6 +9,11 @@ jobs:
   prepare_image:
     name: Build Test Image
     runs-on: ubuntu-latest
+    if: |
+      contains(join(github.event.pull_request.files.*.filename, ','), 'Cargo.toml') ||
+      contains(join(github.event.pull_request.files.*.filename, ','), 'Cargo.lock')
+    outputs:
+      built: true
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -28,80 +33,45 @@ jobs:
           context: .
           file: docker/Dockerfile.test
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/cheatess-test:latest
+          tags: ${{ env.IMAGE_NAME }}
 
   check:
     name: Check
     runs-on: ubuntu-latest
-    needs: prepare_image    
     container:
-      image: leghart/cheatess-test:latest
-
+      image: ${{ env.IMAGE_NAME }}
+    needs: [prepare_image]
     steps:
-      - name: Checkout sources
-        uses: actions/checkout@v2
-
-      - name: Run cargo check
-        run: cargo check
+      - uses: actions/checkout@v2
+      - run: cargo check
 
   test:
     name: Tests
     runs-on: ubuntu-latest
-    needs: prepare_image    
     container:
-      image: leghart/cheatess-test:latest
-
+      image: ${{ env.IMAGE_NAME }}
+    needs: [prepare_image]
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
+      - uses: actions/checkout@v2
+      - run: cargo test
 
-      - name: Run cargo test
-        run: cargo test
-
-  # fmt:
-  #   name: Format
-  #   runs-on: ubuntu-latest
-  #   needs: prepare_image    
-  #   container:
-  #     image: leghart/cheatess-test:latest
-
-  #   steps:
-  #     - name: Checkout sources
-  #       uses: actions/checkout@v2
-
-  #     - name: Run cargo fmt
-  #       run: cargo fmt --all -- --check
-
-  # clippy:
-  #   name: Lint
-  #   runs-on: ubuntu-latest
-  #   needs: prepare_image    
-  #   container:
-  #     image: leghart/cheatess-test:latest
-
-  #   steps:
-  #     - name: Checkout sources
-  #       uses: actions/checkout@v2
-
-  #     - name: Run cargo clippy
-  #       run: cargo clippy -- -D warnings
 
   fmt:
-    name: cargo fmt
+    name: Format
     runs-on: ubuntu-latest
-    needs: prepare_image
+    container:
+      image: ${{ env.IMAGE_NAME }}
+    needs: [prepare_image]
     steps:
       - uses: actions/checkout@v2
-
-      - name: Run fmt inside Docker
-        run: docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace ${{ env.IMAGE_NAME }} cargo fmt --all -- --check
+      - run: cargo fmt --all -- --check
 
   clippy:
-    name: cargo clippy
+    name: Lint
     runs-on: ubuntu-latest
-    needs: prepare_image
+    container:
+      image: ${{ env.IMAGE_NAME }}
+    needs: [prepare_image]
     steps:
       - uses: actions/checkout@v2
-
-      - name: Run clippy inside Docker
-        run: docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace ${{ env.IMAGE_NAME }} cargo clippy -- -D warnings
+      - run: cargo clippy -- -D warnings
