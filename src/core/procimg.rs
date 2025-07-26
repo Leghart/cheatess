@@ -1,5 +1,5 @@
 use super::engine::{register_piece, Color};
-use image::{ImageBuffer, Rgba};
+use image::{imageops, ImageBuffer, Rgba};
 
 use opencv::{core::Mat, imgproc};
 use opencv::{
@@ -412,10 +412,13 @@ pub fn image_buffer_to_gray_mat(img: &ImageBuffer<Rgba<u8>, Vec<u8>>) -> opencv:
     Ok(gray_mat)
 }
 
+pub fn crop_image(raw: &Mat, coords: &(u32, u32, u32, u32)) -> ImageBuffer<Rgba<u8>, Vec<_>> {
+    imageops::crop_imm(&raw, coords.0, coords.1, coords.2, coords.3).to_image()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use image::imageops;
     use opencv::{imgcodecs, imgproc};
 
     #[test]
@@ -447,9 +450,7 @@ mod tests {
             .unwrap()
         };
 
-        let cropped =
-            imageops::crop_imm(&rgba_image, coords.0, coords.1, coords.2, coords.3).to_image();
-
+        let cropped = crop_image(&rgba_image, &coords);
         let final_mat = image_buffer_to_gray_mat(&cropped).unwrap();
 
         assert_eq!(final_mat.size().unwrap(), ref_mat.size().unwrap());
