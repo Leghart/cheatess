@@ -1,8 +1,12 @@
 [package]
 name = "cheatess-core"
-author = "Dawid Sieluzycki @leghart"
+authors = ["Dawid Sieluzycki @leghart"]
 version = "0.1.0"
 edition = "2021"
+repository = "https://github.com/Leghart/cheatess"
+license = "MIT"
+exclude = ["/templates"]
+include = ["/src"]
 
 [dependencies]
 clap = { version = "4.5.41", default-features = false, features = ["std"] }
