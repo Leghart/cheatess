@@ -20,8 +20,8 @@ It works by monitoring your screen in real time, detecting board positions, and 
 - [Usage](#usage)
   - [Test Mode](#test-mode)
   - [Game Mode](#game-mode)
+- [Docker image](#docker)
 - [Recommendations](#recommendations)
-- [Contributing](#contributing)
 
 ---
 
@@ -41,7 +41,7 @@ It works by monitoring your screen in real time, detecting board positions, and 
 Cheatess Core allows you to customize various runtime parameters using command-line arguments.  
 There are several subparsers that group related options: `stockfish`, `monitor`, `engine`, and `imgproc`.
 
-### 🧠 Stockfish
+### Stockfish
 
 Configure the behavior of the Stockfish engine:
 
@@ -59,7 +59,7 @@ Configure the behavior of the Stockfish engine:
 
 ---
 
-### 🖥️ Monitor
+### Monitor
 
 Configure which monitor to use for board detection:
 
@@ -67,7 +67,7 @@ Configure which monitor to use for board detection:
 
 ---
 
-### ♟️ Engine
+### Engine
 
 Customize how the engine output is displayed in the terminal:
 
@@ -75,7 +75,7 @@ Customize how the engine output is displayed in the terminal:
 
 ---
 
-### 🧪 Image Processing (`imgproc`)
+### Image Processing (`imgproc`)
 
 Fine-tune the parameters related to board and piece recognition:
 
@@ -119,6 +119,28 @@ The program will begin monitoring your screen for chess activity. When it detect
     <img src="images/pos2.png" width="200"/> 
     <img src="images/pos3.png" width="200"/> 
 </p>
+
+# Docker image
+
+You can use the prebuilt image with the core logic by running:
+
+```
+docker pull leghart/cheatess_prod:latest
+```
+
+Alternatively, you can build it manually with:
+
+```
+docker build -f docker/Dockerfile.prod -t cheatess_prod .
+```
+
+To use the image, you can run `scripts/start_core.sh` or manually execute
+
+```
+docker run -it -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix cheatess_prod <flags>
+```
+
+The argument with path to stockfish binary is automatically applied inside image.
 
 # Recommendations
 
