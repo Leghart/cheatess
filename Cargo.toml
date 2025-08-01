@@ -9,7 +9,7 @@ exclude = ["/templates"]
 include = ["/src"]
 
 [dependencies]
-clap = { version = "4.5.41", default-features = false, features = ["std"] }
+clap = { version = "4.5.41", default-features = false, features = ["std", "help"] }
 clap-verbosity-flag = { version = "3.0.3", default-features = false, features=["log"]}
 image = { version = "0.25", default-features = false }
 log = { version = "0.4.27", default-features = false }
