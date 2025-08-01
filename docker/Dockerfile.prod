@@ -8,8 +8,8 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /workspace
 
-COPY core/src ./src
-COPY core/Cargo.* ./
+COPY src ./src
+COPY Cargo.* ./
 
 RUN cargo build --release
 
