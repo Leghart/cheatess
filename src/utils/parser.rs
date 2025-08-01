@@ -3,7 +3,14 @@ use clap::{Args, FromArgMatches, Subcommand, ValueEnum};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 
 #[derive(Parser, Debug, Clone)]
-#[clap(author = "Dawid Sieluzycki @Leghart", version = "0.1.0", about)]
+#[clap(
+    author = "Dawid Sieluzycki @Leghart",
+    version = "0.1.0",
+    override_usage = "cheatess-core stockfish --path <path> [OPTIONS]"
+)]
+/// CLI for Cheatess, a chess cheat tool.
+/// You can use it to play chess against a computer or to test your chess skills.
+/// It is not intended to be used for cheating in online games (cheating is bad :)).
 struct RawArgs {
     #[command(subcommand)]
     subparser: Option<Subparser>,
@@ -24,54 +31,65 @@ enum Subparser {
 }
 
 #[derive(Debug, Clone, Parser)]
+/// Monitor configuration. Allows to specify monitor to use
 pub struct MonitorArgs {
     #[arg(short, long, default_value_t = 0)]
     pub number: u8,
 }
 
-#[derive(Debug, Clone, Parser)]
+#[derive(Debug, Clone, Args)]
+/// Stockfish configuration. Allows to setup stockfish engine parameters
 pub struct StockfishArgs {
-    #[arg(
-        short,
-        long,
-        default_value = "/home/leghart/projects/cheatess/stockfish-ubuntu-x86-64-avx2"
-    )]
+    #[arg(short, long)]
+    /// Path to the stockfish binary
     pub path: std::path::PathBuf,
 
     #[arg(short, long, default_value_t = 1700)]
+    /// Elo rating of the stockfish engine
     pub elo: usize,
 
     #[arg(short, long, default_value_t = 20)]
+    /// Skill level of the stockfish engine
     pub skill: u8,
 
     #[arg(short, long, default_value_t = 5)]
+    /// Search depth of the stockfish engine
     pub depth: u8,
 
     #[arg(long, default_value_t = 16)]
+    /// Memory size of the stockfish engine in MB
     pub hash: usize,
 }
 
 #[derive(Debug, Clone, Parser)]
+/// Image processing configuration. Allows to specify image processing parameters
 pub struct ImgProcArgs {
     #[arg(short, long, default_value_t = 5)]
+    /// Margin around the piece in board in pixels during extraction
     pub margin: u8,
 
     #[arg(short, long, default_value_t = 0.1)]
+    /// Threshold for detecting pieces in the image during game
     pub piece_threshold: f64,
 
     #[arg(short, long, default_value_t = 127.0)]
+    /// Threshold for extracting pieces from the image
     pub extract_piece_threshold: f64,
 
     #[arg(short, long, default_value_t = 100.0)]
+    /// Threshold for binarizing the image before game
     pub board_threshold: f64,
 
     #[arg(short, long, default_value_t = 500)]
+    /// Sensitivity level to check if any change has occurred on the two boards
     pub difference_level: i32,
 }
 
 #[derive(Debug, Clone, Parser)]
+/// Engine configuration. Allows to specify engine parameters
 pub struct EngineArgs {
     #[arg(short, long, default_value_t = false)]
+    /// Whether to use chess pieces in terminal or letters
     pub pretty: bool,
 }
 
@@ -112,6 +130,7 @@ pub fn parse_args_from<I: IntoIterator<Item = T>, T: Into<String>>(iterator: I) 
     }
 
     let args = RawArgs::parse_from(updated);
+
     let mut monitor: Option<MonitorArgs> = None;
     let mut stockfish: Option<StockfishArgs> = None;
     let mut proc_image: Option<ImgProcArgs> = None;
