@@ -44,7 +44,6 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - run: cargo check
-        working-directory: core
 
   test:
     name: Tests
@@ -55,7 +54,6 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - run: cargo test
-        working-directory: core
 
   fmt:
     name: Format
@@ -66,7 +64,6 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - run: cargo fmt --all -- --check
-        working-directory: core
 
   clippy:
     name: Lint
@@ -77,4 +74,3 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - run: cargo clippy -- -D warnings
-        working-directory: core
