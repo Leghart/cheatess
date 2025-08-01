@@ -14,9 +14,9 @@ RUN apt-get update && apt-get install -y \
 
 RUN rustup component add rustfmt clippy
 
-COPY core/src /workspace/src
-COPY core/templates /workspace/templates
-COPY core/Cargo.* /workspace
+COPY src /workspace/src
+COPY templates /workspace/templates
+COPY Cargo.* /workspace
 
 WORKDIR /workspace
 
