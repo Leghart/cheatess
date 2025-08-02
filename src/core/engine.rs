@@ -12,7 +12,7 @@ pub struct Board<P: Printer, V: View> {
     printer: std::marker::PhantomData<(P, V)>,
 }
 
-impl<P: Printer, V: View> AnyBoard for Board<P, V> {
+impl<P: Printer + Sync + Send, V: View + Sync + Send> AnyBoard for Board<P, V> {
     fn print(&self, writer: &mut dyn Write) {
         Board::print(self, writer);
     }
@@ -104,17 +104,19 @@ pub enum Color {
     Black,
 }
 
-pub fn create_board_default<P: Printer + 'static>(player_color: &Color) -> Box<dyn AnyBoard> {
+pub fn create_board_default<P: Printer + 'static + Send + Sync>(
+    player_color: &Color,
+) -> Box<dyn AnyBoard + Send + Sync> {
     match player_color {
         Color::White => Box::new(Board::<P, WhiteView>::default_white()),
         Color::Black => Box::new(Board::<P, BlackView>::default_black()),
     }
 }
 
-pub fn create_board_from_data<P: Printer + 'static>(
+pub fn create_board_from_data<P: Printer + 'static + Send + Sync>(
     data: [[char; 8]; 8],
     player_color: &Color,
-) -> Box<dyn AnyBoard> {
+) -> Box<dyn AnyBoard + Send + Sync> {
     match player_color {
         Color::White => Box::new(Board::<P, WhiteView>::new(data)),
         Color::Black => Box::new(Board::<P, BlackView>::new(data)),

@@ -25,7 +25,7 @@ fn get_piece(c: char) -> Option<&'static str> {
     }
 }
 
-pub trait Printer {
+pub trait Printer: Send + Sync {
     fn print_piece(piece: char) -> String;
 }
 
@@ -43,7 +43,7 @@ impl Printer for PrettyPrinter {
     }
 }
 
-pub trait View {
+pub trait View: Send + Sync {
     fn row(i: usize) -> usize;
     fn col(i: usize) -> usize;
 }
@@ -68,7 +68,7 @@ impl View for BlackView {
     }
 }
 
-pub trait AnyBoard {
+pub trait AnyBoard: Send + Sync {
     fn print(&self, writer: &mut dyn Write);
     fn raw(&self) -> &[[char; 8]; 8];
 }
