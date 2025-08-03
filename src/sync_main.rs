@@ -87,8 +87,8 @@ fn game(args: utils::parser::CheatessArgs) {
             args.proc_image.piece_threshold,
             args.proc_image.board_threshold,
         );
-        log::trace!("Pieces detection: {:?}", start.elapsed());
-        log::trace!(
+        log::debug!("Pieces detection: {:?}", start.elapsed());
+        log::debug!(
             "OpenCV matchTemplate result: {}",
             utils::printer::raw_board_to_string(&new_raw_board)
         );

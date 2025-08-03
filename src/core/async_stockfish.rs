@@ -4,13 +4,11 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader as AsyncBufReader};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 use tokio::sync::Mutex;
 
-use tokio::time::{timeout, Duration};
-
 #[async_trait::async_trait]
 pub trait AsyncProcess: Send + Sync {
     async fn write_line(&mut self, msg: &str);
     async fn read_line(&mut self) -> String;
-    async fn lines(&mut self) -> Vec<String>;
+    async fn lines(&mut self, stop: &str) -> Vec<String>;
     async fn is_running(&mut self) -> bool;
     #[allow(dead_code)]
     fn as_any(&self) -> &dyn std::any::Any;
@@ -46,6 +44,7 @@ impl RealAsyncProcess {
 #[async_trait::async_trait]
 impl AsyncProcess for RealAsyncProcess {
     async fn write_line(&mut self, msg: &str) {
+        log::trace!("write line to stockfish: {msg}");
         self.stdin
             .write_all(format!("{msg}\n").as_bytes())
             .await
@@ -55,62 +54,28 @@ impl AsyncProcess for RealAsyncProcess {
     }
 
     async fn read_line(&mut self) -> String {
-        let mut line = String::new();
+        let mut line: String = String::new();
         self.stdout
             .read_line(&mut line)
             .await
             .expect("Error reading stdout");
 
-        line.trim().to_string()
+        let line = line.trim().to_string();
+        log::trace!("read line from stockfish: {line}");
+        line
     }
 
-    // async fn lines(&mut self) -> Vec<String> {
-    //     let mut lines = Vec::new();
-    //     loop {
-    //         let mut line = String::new();
-    //         match self.stdout.read_line(&mut line).await {
-    //             Ok(0) => break,
-    //             Ok(_) => lines.push(line.trim().to_string()),
-    //             Err(_) => break,
-    //         }
-    //     }
-    //     lines
-    // }
-
-    async fn lines(&mut self) -> Vec<String> {
+    async fn lines(&mut self, stop: &str) -> Vec<String> {
         let mut lines = Vec::new();
-        let mut buf_reader = AsyncBufReader::new(&mut self.stdout);
-        // buf_reader
-        //     .lines()
-        //     .for_each(|line| {
-        //         if let Ok(line) = line {
-        //             lines.push(line);
-        //         }
-        //     })
-        //     .await;
-        // lines
+
         loop {
-            let mut line = String::new();
-
-            // TODO!: terrible
-            let result = timeout(Duration::from_millis(50), buf_reader.read_line(&mut line)).await;
-
-            match result {
-                Ok(Ok(0)) => break,
-                Ok(Ok(_)) => {
-                    lines.push(line.trim().to_string());
-                }
-                Ok(Err(e)) => {
-                    log::error!("Read error: {e}");
-                    break;
-                }
-                Err(_) => {
-                    log::error!("Read timeout");
-                    break;
-                }
+            let line = self.read_line().await;
+            if line.starts_with(stop) {
+                lines.push(line);
+                break;
             }
+            lines.push(line);
         }
-
         lines
     }
 
@@ -190,7 +155,7 @@ impl AsyncStockfish {
         let mut evaluation_cp: Option<f32> = None;
         let mut evaluation_mate: Option<f32> = None;
 
-        let lines = self.proc.lock().await.lines().await;
+        let lines = self.proc.lock().await.lines("bestmove").await;
         for line in lines {
             let parts: Vec<&str> = line.split_whitespace().collect();
             if parts.is_empty() {
@@ -201,7 +166,6 @@ impl AsyncStockfish {
             }
             if parts[0] == "info" {
                 if let Some(score_index) = parts.iter().position(|&x| x == "score") {
-                    log::trace!("raw stockfish output: {parts:?}");
                     if score_index + 2 < parts.len() {
                         let score_type = parts[score_index + 1];
                         let score_value = parts[score_index + 2];
@@ -345,21 +309,18 @@ impl AsyncStockfish {
             return;
         }
 
-        log::trace!("send cmd to stockfish: {s}");
         proc.write_line(s).await;
     }
 
     async fn read_line(&self) -> String {
         let mut proc = self.proc.lock().await;
-        let recv = proc.read_line().await;
-        log::trace!("recv msg from stockfish: {recv}");
-        recv
+        proc.read_line().await
     }
 
     async fn get_move_from_proc(&self) -> Option<String> {
         let mut last_text = String::new();
         let mut info = self.info.lock().await;
-        let lines = self.proc.lock().await.lines().await;
+        let lines = self.proc.lock().await.lines("bestmove").await;
 
         for line in lines {
             let splitted: Vec<&str> = line.split_whitespace().collect();
@@ -385,7 +346,7 @@ impl AsyncStockfish {
 
     async fn get_fen_position(&self) -> String {
         self._put("d").await;
-        let lines = self.proc.lock().await.lines().await;
+        let lines = self.proc.lock().await.lines("Fen").await;
 
         for line in lines {
             let trimmed = line.trim();
