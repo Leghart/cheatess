@@ -208,6 +208,7 @@ pub fn detect_move(
     let mut move_type: MoveType = MoveType::Unknown;
 
     let changed_moves = get_coords_moved_pieces(before, after)?;
+    log::trace!("Coordinates of moved pieces: {:?}", changed_moves);
 
     match changed_moves.len() {
         // move forward / capture piece / promotion w/t capture
@@ -216,6 +217,7 @@ pub fn detect_move(
                 .iter()
                 .all(|d| (d.piece_before == ' ' || d.piece_after == ' '))
             {
+                log::trace!("Detected move: Forward or Promotion");
                 let _from = changed_moves
                     .iter()
                     .find(|&d| d.piece_before != ' ' && d.piece_after == ' ')
@@ -234,6 +236,7 @@ pub fn detect_move(
                 }
             } else {
                 // e.x. [(1,2, 'p', ' '), (1,1, 'N', 'p') ] or  [(6,6,'P', ' ' ), (7,6, 'b', 'Q')]  -> Capture or PromotionCapture
+                log::trace!("Detected move: Capture or PromotionCapture");
                 let _from = changed_moves
                     .iter()
                     .find(|&d| d.piece_after == ' ')
@@ -258,6 +261,7 @@ pub fn detect_move(
         }
         //en passant
         3 => {
+            log::trace!("Detected move: En Passant");
             let _to = changed_moves
                 .iter()
                 .find(|&d| d.piece_before == ' ' && d.piece_after != ' ')
@@ -273,6 +277,7 @@ pub fn detect_move(
         }
         //castle
         4 => {
+            log::trace!("Detected move: Castle");
             let _to = changed_moves
                 .iter()
                 .find(|&d| d.piece_before == ' ' && (d.piece_after == 'k' || d.piece_after == 'K'))
