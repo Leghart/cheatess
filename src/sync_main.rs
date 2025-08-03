@@ -1,44 +1,34 @@
+use std::io;
 use std::sync::Arc;
-use tokio;
-use tokio::time::{sleep, Instant};
+use std::time::Instant;
+
 mod core;
 mod utils;
 
 static LOGGER: utils::logger::Logger = utils::logger::Logger;
 
-fn clear_screen() {
-    print!("\x1B[2J\x1B[H");
-}
-
-#[tokio::main]
-async fn main() {
+fn main() {
     let env_args: Vec<String> = std::env::args().collect();
     let args = utils::parser::parse_args_from(env_args);
 
     utils::logger::init(&args.verbose.log_level_filter());
 
     match args.mode {
-        utils::parser::Mode::Game => game(args).await,
-        utils::parser::Mode::Test => config_mode(args).await.expect("Test config failed"),
+        utils::parser::Mode::Game => game(args),
+        utils::parser::Mode::Test => config_mode(args).expect("Test config failed"),
     }
 }
 
-async fn game(args: utils::parser::CheatessArgs) {
+fn game(args: utils::parser::CheatessArgs) {
     clear_screen();
 
-    let mut stdout = std::io::stdout();
-    let sf = core::async_stockfish::AsyncStockfish::new(&args.stockfish.path, args.stockfish.depth)
-        .await;
-    {
-        let version = sf.version.lock().await;
-        println!("{}", version);
-    }
+    let mut stdout = io::stdout();
+    let mut sf = core::stockfish::Stockfish::new(&args.stockfish.path, args.stockfish.depth);
     sf.set_config(
         &args.stockfish.elo.to_string(),
         &args.stockfish.skill.to_string(),
         &args.stockfish.hash.to_string(),
-    )
-    .await;
+    );
 
     let monitor =
         utils::monitor::select_monitor(args.monitor.number).expect("Requested monitor not found");
@@ -73,23 +63,21 @@ async fn game(args: utils::parser::CheatessArgs) {
 
     let mut prev_board_mat = board;
     let mut prev_board_arr = base_board;
-
-    let best_move = sf.get_best_move().await.unwrap();
+    let best_move = sf.get_best_move().unwrap();
     log::info!("Stockfish best move: {best_move}");
-    log::info!("Evaluation: {:?}", sf.get_evaluation().await);
+    log::info!("Evaluation: {:?}", sf.get_evaluation());
 
     loop {
         let start = Instant::now();
         let cropped =
-            utils::monitor::get_cropped_screen(&monitor, coords.0, coords.1, coords.2, coords.3);
-        let gray_board = core::procimg::image_buffer_to_gray_mat(&cropped).unwrap();
+            utils::monitor::get_cropped_screen(&monitor, coords.0, coords.1, coords.2, coords.3); // ~25ms
+        let gray_board = core::procimg::image_buffer_to_gray_mat(&cropped).unwrap(); // ~20ms
 
         if !core::procimg::are_images_different(
             &prev_board_mat,
             &gray_board,
             args.proc_image.difference_level,
         ) {
-            sleep(std::time::Duration::from_millis(10)).await;
             continue;
         }
 
@@ -105,10 +93,13 @@ async fn game(args: utils::parser::CheatessArgs) {
             utils::printer::raw_board_to_string(&new_raw_board)
         );
 
-        match core::engine::detect_move(prev_board_arr.raw(), &new_raw_board, &player_color) {
+        let detected_move =
+            core::engine::detect_move(prev_board_arr.raw(), &new_raw_board, &player_color);
+
+        match detected_move {
             Ok((mv, mv_type)) => {
                 log::info!("Detected move: {mv:?} [{mv_type:?}]");
-                sf.make_move(vec![mv]).await;
+                sf.make_move(vec![mv]);
             }
             Err(e) => {
                 log::error!("{e}");
@@ -130,10 +121,10 @@ async fn game(args: utils::parser::CheatessArgs) {
         };
         curr_board.print(&mut stdout);
 
-        match sf.get_best_move().await {
+        match sf.get_best_move() {
             Some(best) => {
                 log::info!("Stockfish best move: {best}");
-                log::info!("Evaluation: {:?}", sf.get_evaluation().await);
+                log::info!("Evaluation: {:?}", sf.get_evaluation());
             }
             None => {
                 log::info!("Game over");
@@ -143,11 +134,11 @@ async fn game(args: utils::parser::CheatessArgs) {
 
         prev_board_arr = curr_board;
         prev_board_mat = gray_board;
-        log::info!("Processing time: {:?}", start.elapsed());
+        log::debug!("Cycle time: {:?}", start.elapsed());
     }
 }
 
-async fn config_mode(args: utils::parser::CheatessArgs) -> Result<(), Box<dyn std::error::Error>> {
+fn config_mode(args: utils::parser::CheatessArgs) -> Result<(), Box<dyn std::error::Error>> {
     log::info!("Welcome to the interactive test setup for cheatess. Follow the instructions to ensure everything works correctly while playing.");
 
     log::info!("\n[Step 1/7] Collected invoke parameters:");
@@ -214,11 +205,11 @@ async fn config_mode(args: utils::parser::CheatessArgs) -> Result<(), Box<dyn st
             &player_color,
         )
     };
-    calc_board.print(&mut std::io::stdout());
+    calc_board.print(&mut io::stdout());
 
     log::info!("[Step 7/7] Last step, make any move on your web board and check if move detection is correct (you can configure it with -d flag)");
     log::info!("If you make an exactly one move, press enter...");
-    std::io::stdin().read_line(&mut String::new())?;
+    io::stdin().read_line(&mut String::new())?;
 
     let prev_board = board;
     let prev_board_arr = calc_board;
@@ -249,4 +240,8 @@ async fn config_mode(args: utils::parser::CheatessArgs) -> Result<(), Box<dyn st
     log::info!("Detected move: {detected_move}");
 
     Ok(())
+}
+
+fn clear_screen() {
+    print!("\x1B[2J\x1B[H");
 }

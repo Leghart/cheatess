@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use subprocess::{Popen, PopenConfig, Redirection};
 
-pub trait Process {
+pub trait Process: Send + Sync {
     fn write_line(&mut self, msg: &str);
     fn read_line(&mut self) -> String;
     fn lines<'a>(&'a mut self) -> Box<dyn Iterator<Item = String> + 'a>;

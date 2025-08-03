@@ -3,7 +3,7 @@ name = "cheatess-core"
 authors = ["Dawid Sieluzycki @leghart"]
 version = "0.1.0"
 edition = "2021"
-repository = "https://github.com/Leghart/cheatess"
+repository = "https://github.com/Leghart/cheatess-core"
 license = "MIT"
 exclude = ["/templates"]
 include = ["/src"]
@@ -17,6 +17,8 @@ opencv = { version = "0.94.2", default-features = false, features = ["clang-runt
 subprocess = { version = "0.2.9", default-features = false }
 text-colorizer = { version = "1.0.0", default-features = false }
 xcap = { version = "0.6.1", default-features = false }
+tokio = { version = "1.47.1", features = ["full"] }
+async-trait = { version = "0.1" }
 
 [dev-dependencies]
 rstest = "0.24.0"
