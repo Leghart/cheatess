@@ -72,3 +72,14 @@ pub trait AnyBoard: Send + Sync {
     fn print(&self, writer: &mut dyn Write);
     fn raw(&self) -> &[[char; 8]; 8];
 }
+
+pub fn raw_board_to_string(board: &[[char; 8]; 8]) -> String {
+    let mut result = String::from("\n");
+    for row in board.iter() {
+        for &piece in row.iter() {
+            result.push_str(&format!("{piece} "));
+        }
+        result.push('\n');
+    }
+    result
+}

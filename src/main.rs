@@ -8,10 +8,6 @@ mod utils;
 static LOGGER: utils::logger::Logger = utils::logger::Logger;
 
 fn main() {
-    run();
-}
-
-fn run() {
     let env_args: Vec<String> = std::env::args().collect();
     let args = utils::parser::parse_args_from(env_args);
 
@@ -76,7 +72,6 @@ fn game(args: utils::parser::CheatessArgs) {
         let cropped =
             utils::monitor::get_cropped_screen(&monitor, coords.0, coords.1, coords.2, coords.3); // ~25ms
         let gray_board = core::procimg::image_buffer_to_gray_mat(&cropped).unwrap(); // ~20ms
-        log::trace!("image preparation: {:?}", start.elapsed());
 
         if !core::procimg::are_images_different(
             &prev_board_mat,
@@ -93,6 +88,10 @@ fn game(args: utils::parser::CheatessArgs) {
             args.proc_image.board_threshold,
         );
         log::trace!("Pieces detection: {:?}", start.elapsed());
+        log::trace!(
+            "OpenCV matchTemplate result: {}",
+            utils::printer::raw_board_to_string(&new_raw_board)
+        );
 
         let detected_move =
             core::engine::detect_move(prev_board_arr.raw(), &new_raw_board, &player_color);
