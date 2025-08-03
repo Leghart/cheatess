@@ -75,10 +75,9 @@ pub trait AnyBoard: Send + Sync {
 
 pub fn raw_board_to_string(board: &[[char; 8]; 8]) -> String {
     let mut result = String::from("\n");
-    for i in 0..8 {
-        for j in 0..8 {
-            let piece = board[i][j];
-            result.push_str(&format!("{} ", piece));
+    for row in board.iter() {
+        for &piece in row.iter() {
+            result.push_str(&format!("{piece} "));
         }
         result.push('\n');
     }

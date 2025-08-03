@@ -208,7 +208,7 @@ pub fn detect_move(
     let mut move_type: MoveType = MoveType::Unknown;
 
     let changed_moves = get_coords_moved_pieces(before, after)?;
-    log::trace!("Coordinates of moved pieces: {:?}", changed_moves);
+    log::trace!("Coordinates of moved pieces: {changed_moves:?}");
 
     match changed_moves.len() {
         // move forward / capture piece / promotion w/t capture
