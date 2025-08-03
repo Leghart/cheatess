@@ -1,3 +1,5 @@
+#![cfg(not(feature = "async"))]
+
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use subprocess::{Popen, PopenConfig, Redirection};
@@ -45,6 +47,7 @@ impl Process for RealProcess {
 
         if self.proc.poll().is_none() {
             if let Some(stdin) = &mut self.proc.stdin {
+                log::trace!("write line to stockfish: {msg}");
                 writeln!(stdin, "{msg}").expect("Failed to write to stdin");
                 stdin.flush().expect("Failed to flush stdin");
             }
@@ -57,16 +60,16 @@ impl Process for RealProcess {
             let mut line = String::new();
             match reader.read_line(&mut line) {
                 Ok(0) => panic!("EOF reached unexpectedly"),
-                Ok(_) => line.trim().to_string(),
+                Ok(_) => {
+                    let line = line.trim().to_string();
+                    log::trace!("read line from stockfish: {line}");
+                    line
+                }
                 Err(e) => panic!("Error reading stdout: {e}"),
             }
         } else {
             panic!("stdout is not available");
         }
-    }
-
-    fn is_running(&mut self) -> bool {
-        self.proc.poll().is_none()
     }
 
     #[allow(clippy::lines_filter_map_ok)]
@@ -77,6 +80,10 @@ impl Process for RealProcess {
         } else {
             Box::new(std::iter::empty())
         }
+    }
+
+    fn is_running(&mut self) -> bool {
+        self.proc.poll().is_none()
     }
 }
 
@@ -89,7 +96,6 @@ pub struct Stockfish {
     pub version: String,
 }
 
-#[allow(dead_code)]
 impl Stockfish {
     pub fn new(exec_path: &std::path::PathBuf, depth: u8) -> Self {
         let real_proc = RealProcess::new(exec_path);
@@ -108,7 +114,7 @@ impl Stockfish {
 
         _self.version = _self.read_line();
         _self._put("uci");
-        let _ = _self.read_line(); // clear buffer
+        let _ = _self.read_line();
 
         _self
     }
@@ -133,6 +139,7 @@ impl Stockfish {
 
     //TODO: fix
     //TODO: add tests
+    #[allow(dead_code)]
     pub fn get_wdl_stats(&mut self) -> [usize; 3] {
         let fen_position = self.get_fen_position();
         self._put(&format!("position {fen_position}"));
@@ -226,6 +233,7 @@ impl Stockfish {
         (evaluation_cp.unwrap_or(0.0) / 100.0).to_string()
     }
 
+    #[allow(dead_code)]
     pub fn set_skill_level(&mut self, level: usize) {
         self.update_params(HashMap::from_iter([
             ("UCI_LimitStrength", "false"),
@@ -233,6 +241,7 @@ impl Stockfish {
         ]));
     }
 
+    #[allow(dead_code)]
     pub fn set_elo_rating(&mut self, rating: usize) {
         self.update_params(HashMap::from_iter([
             ("UCI_LimitStrength", "true"),
@@ -360,6 +369,7 @@ impl Stockfish {
         None
     }
 
+    #[allow(dead_code)]
     fn go_time(&mut self, time: usize) {
         self._put(&format!("go movetime {time}"));
     }

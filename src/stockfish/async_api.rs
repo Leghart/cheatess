@@ -1,5 +1,8 @@
+#![cfg(feature = "async")]
+
 use std::collections::HashMap;
 use std::path::PathBuf;
+
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader as AsyncBufReader};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 use tokio::sync::Mutex;
@@ -43,6 +46,10 @@ impl RealAsyncProcess {
 
 #[async_trait::async_trait]
 impl AsyncProcess for RealAsyncProcess {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
     async fn write_line(&mut self, msg: &str) {
         log::trace!("write line to stockfish: {msg}");
         self.stdin
@@ -84,10 +91,6 @@ impl AsyncProcess for RealAsyncProcess {
             Ok(None) => true,
             _ => false,
         }
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
     }
 }
 
@@ -354,15 +357,11 @@ impl AsyncStockfish {
                 return trimmed[5..].to_string();
             }
         }
-        panic!("FEN position not found");
+        panic!();
     }
 
     async fn is_correct_move(&self, _move: &str) -> bool {
-        let old_info: String;
-        {
-            old_info = self.info.lock().await.clone();
-        }
-
+        let old_info: String = self.info.lock().await.clone();
         self._put(&format!("go depth 1 searchmoves {_move}")).await;
         let result = self.get_move_from_proc().await.is_some();
         let mut info = self.info.lock().await;

@@ -1,9 +1,9 @@
 pub mod core;
+pub mod stockfish;
 pub mod utils;
 
 pub use core::engine;
 pub use core::procimg;
-pub use core::stockfish;
 
 pub use utils::logger;
 pub use utils::monitor;

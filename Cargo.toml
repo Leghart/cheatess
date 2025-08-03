@@ -8,17 +8,21 @@ license = "MIT"
 exclude = ["/templates"]
 include = ["/src"]
 
+[features]
+default = ["subprocess"]
+async = ["async-trait"]
+
 [dependencies]
 clap = { version = "4.5.41", default-features = false, features = ["std", "help"] }
 clap-verbosity-flag = { version = "3.0.3", default-features = false, features=["log"]}
 image = { version = "0.25", default-features = false }
 log = { version = "0.4.27", default-features = false }
 opencv = { version = "0.94.2", default-features = false, features = ["clang-runtime", "imgproc", "highgui"] }
-subprocess = { version = "0.2.9", default-features = false }
+subprocess = { version = "0.2.9", default-features = false, optional = true }
 text-colorizer = { version = "1.0.0", default-features = false }
 xcap = { version = "0.6.1", default-features = false }
-tokio = { version = "1.47.1", features = ["full"] }
-async-trait = { version = "0.1" }
+tokio = { version = "1.47.1", features = ["full"], optional = false }
+async-trait = { version = "0.1", optional = true }
 
 [dev-dependencies]
 rstest = "0.24.0"

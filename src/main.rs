@@ -1,44 +1,78 @@
 use std::sync::Arc;
 use tokio;
-use tokio::time::{sleep, Instant};
+
+#[cfg(feature = "async")]
+use tokio::time::Instant;
+
+#[cfg(not(feature = "async"))]
+use std::time::Instant;
+
 mod core;
+mod stockfish;
 mod utils;
+
+#[cfg(feature = "async")]
+macro_rules! maybe_await {
+    ($expr:expr) => {
+        $expr.await
+    };
+}
+
+#[cfg(not(feature = "async"))]
+macro_rules! maybe_await {
+    ($expr:expr) => {
+        $expr
+    };
+}
 
 static LOGGER: utils::logger::Logger = utils::logger::Logger;
 
 fn clear_screen() {
     print!("\x1B[2J\x1B[H");
 }
-
+#[cfg(feature = "async")]
 #[tokio::main]
 async fn main() {
     let env_args: Vec<String> = std::env::args().collect();
     let args = utils::parser::parse_args_from(env_args);
 
     utils::logger::init(&args.verbose.log_level_filter());
+    log::info!("[Async={}] Starting cheatess...", cfg!(feature = "async"));
 
     match args.mode {
         utils::parser::Mode::Game => game(args).await,
-        utils::parser::Mode::Test => config_mode(args).await.expect("Test config failed"),
+        utils::parser::Mode::Test => config_mode(args).expect("Test config failed"),
     }
 }
 
-async fn game(args: utils::parser::CheatessArgs) {
+#[cfg(not(feature = "async"))]
+fn main() {
+    let env_args: Vec<String> = std::env::args().collect();
+    let args = utils::parser::parse_args_from(env_args);
+
+    utils::logger::init(&args.verbose.log_level_filter());
+    log::info!("[Async={}] Starting cheatess...", cfg!(feature = "async"));
+
+    match args.mode {
+        utils::parser::Mode::Game => game(args),
+        utils::parser::Mode::Test => config_mode(args).expect("Test config failed"),
+    }
+}
+
+async fn __game(args: utils::parser::CheatessArgs) {
     clear_screen();
 
     let mut stdout = std::io::stdout();
-    let sf = core::async_stockfish::AsyncStockfish::new(&args.stockfish.path, args.stockfish.depth)
-        .await;
-    {
-        let version = sf.version.lock().await;
-        println!("{}", version);
-    }
-    sf.set_config(
+    let mut sf = maybe_await!(stockfish::Stockfish::new(
+        &args.stockfish.path,
+        args.stockfish.depth
+    ));
+
+    maybe_await!(sf.set_config(
         &args.stockfish.elo.to_string(),
         &args.stockfish.skill.to_string(),
         &args.stockfish.hash.to_string(),
-    )
-    .await;
+    ));
 
     let monitor =
         utils::monitor::select_monitor(args.monitor.number).expect("Requested monitor not found");
@@ -74,9 +108,9 @@ async fn game(args: utils::parser::CheatessArgs) {
     let mut prev_board_mat = board;
     let mut prev_board_arr = base_board;
 
-    let best_move = sf.get_best_move().await.unwrap();
+    let best_move = maybe_await!(sf.get_best_move()).unwrap();
     log::info!("Stockfish best move: {best_move}");
-    log::info!("Evaluation: {:?}", sf.get_evaluation().await);
+    log::info!("Evaluation: {:?}", maybe_await!(sf.get_evaluation()));
 
     loop {
         let start = Instant::now();
@@ -89,7 +123,6 @@ async fn game(args: utils::parser::CheatessArgs) {
             &gray_board,
             args.proc_image.difference_level,
         ) {
-            sleep(std::time::Duration::from_millis(10)).await;
             continue;
         }
 
@@ -108,7 +141,7 @@ async fn game(args: utils::parser::CheatessArgs) {
         match core::engine::detect_move(prev_board_arr.raw(), &new_raw_board, &player_color) {
             Ok((mv, mv_type)) => {
                 log::info!("Detected move: {mv:?} [{mv_type:?}]");
-                sf.make_move(vec![mv]).await;
+                maybe_await!(sf.make_move(vec![mv]));
             }
             Err(e) => {
                 log::error!("{e}");
@@ -130,10 +163,10 @@ async fn game(args: utils::parser::CheatessArgs) {
         };
         curr_board.print(&mut stdout);
 
-        match sf.get_best_move().await {
+        match maybe_await!(sf.get_best_move()) {
             Some(best) => {
                 log::info!("Stockfish best move: {best}");
-                log::info!("Evaluation: {:?}", sf.get_evaluation().await);
+                log::info!("Evaluation: {:?}", maybe_await!(sf.get_evaluation()));
             }
             None => {
                 log::info!("Game over");
@@ -147,7 +180,18 @@ async fn game(args: utils::parser::CheatessArgs) {
     }
 }
 
-async fn config_mode(args: utils::parser::CheatessArgs) -> Result<(), Box<dyn std::error::Error>> {
+#[cfg(feature = "async")]
+async fn game(args: utils::parser::CheatessArgs) {
+    __game(args).await;
+}
+
+#[cfg(not(feature = "async"))]
+fn game(args: utils::parser::CheatessArgs) {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(__game(args));
+}
+
+fn config_mode(args: utils::parser::CheatessArgs) -> Result<(), Box<dyn std::error::Error>> {
     log::info!("Welcome to the interactive test setup for cheatess. Follow the instructions to ensure everything works correctly while playing.");
 
     log::info!("\n[Step 1/7] Collected invoke parameters:");
