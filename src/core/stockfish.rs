@@ -5,7 +5,7 @@ use subprocess::{Popen, PopenConfig, Redirection};
 pub trait Process {
     fn write_line(&mut self, msg: &str);
     fn read_line(&mut self) -> String;
-    fn lines<'a>(&'a mut self) -> Box<dyn Iterator<Item = String> + 'a>;
+    fn lines(&mut self, stop: &str) -> Vec<String>;
     fn is_running(&mut self) -> bool;
     #[allow(dead_code)]
     fn as_any(&self) -> &dyn std::any::Any;
@@ -45,6 +45,7 @@ impl Process for RealProcess {
 
         if self.proc.poll().is_none() {
             if let Some(stdin) = &mut self.proc.stdin {
+                log::trace!("Stockfish write line: {msg}");
                 writeln!(stdin, "{msg}").expect("Failed to write to stdin");
                 stdin.flush().expect("Failed to flush stdin");
             }
@@ -57,7 +58,11 @@ impl Process for RealProcess {
             let mut line = String::new();
             match reader.read_line(&mut line) {
                 Ok(0) => panic!("EOF reached unexpectedly"),
-                Ok(_) => line.trim().to_string(),
+                Ok(_) => {
+                    let line = line.trim().to_string();
+                    log::trace!("[SINGLE] Stockfish read line: {line}");
+                    line
+                }
                 Err(e) => panic!("Error reading stdout: {e}"),
             }
         } else {
@@ -69,13 +74,22 @@ impl Process for RealProcess {
         self.proc.poll().is_none()
     }
 
-    #[allow(clippy::lines_filter_map_ok)]
-    fn lines<'a>(&'a mut self) -> Box<dyn Iterator<Item = String> + 'a> {
+    fn lines(&mut self, stop: &str) -> Vec<String> {
         if let Some(stdout) = &mut self.proc.stdout {
-            let reader = BufReader::new(stdout);
-            Box::new(reader.lines().filter_map(|l| l.ok()))
+            let mut lines = Vec::new();
+            for line in BufReader::new(stdout).lines() {
+                let line = line.unwrap();
+                log::trace!("[MULTI] Stockfish read line: {line}");
+
+                if line.starts_with(stop) {
+                    lines.push(line);
+                    break;
+                }
+                lines.push(line);
+            }
+            lines
         } else {
-            Box::new(std::iter::empty())
+            Vec::new()
         }
     }
 }
@@ -139,7 +153,7 @@ impl Stockfish {
         self._go();
 
         let mut result = [0; 3];
-        for line in self.proc.lines() {
+        for line in self.proc.lines("TODO") {
             let parts: Vec<&str> = line.split_whitespace().collect();
             if parts.is_empty() {
                 continue;
@@ -178,7 +192,7 @@ impl Stockfish {
         let mut evaluation_cp: Option<f32> = None;
         let mut evaluation_mate: Option<f32> = None;
 
-        for line in self.proc.lines() {
+        for line in self.proc.lines("bestmove") {
             let parts: Vec<&str> = line.split_whitespace().collect();
             if parts.is_empty() {
                 continue;
@@ -190,7 +204,6 @@ impl Stockfish {
 
             if parts[0] == "info" {
                 if let Some(score_index) = parts.iter().position(|&x| x == "score") {
-                    log::trace!("raw stockfish output: {parts:?}");
                     if score_index + 2 < parts.len() {
                         let score_type = parts[score_index + 1];
                         let score_value = parts[score_index + 2];
@@ -313,7 +326,7 @@ impl Stockfish {
     fn get_fen_position(&mut self) -> String {
         self._put("d");
 
-        for line in self.proc.lines() {
+        for line in self.proc.lines("Fen") {
             let trimmed = line.trim();
             if trimmed.contains("Fen: ") {
                 return trimmed[5..].to_string();
@@ -338,7 +351,7 @@ impl Stockfish {
     fn get_move_from_proc(&mut self) -> Option<String> {
         let mut last_text = String::new();
 
-        for text in self.proc.lines() {
+        for text in self.proc.lines("bestmove") {
             let splitted: Vec<&str> = text.split_whitespace().collect();
             if splitted.is_empty() {
                 continue;
@@ -451,14 +464,15 @@ mod tests {
             self.running
         }
 
-        fn lines<'a>(&'a mut self) -> Box<dyn Iterator<Item = String> + 'a> {
-            let iter = self
-                .lines_to_read
-                .iter()
-                .cloned() // to avoid situation when buffer filled with future msgs is consumed
-                .collect::<Vec<_>>()
-                .into_iter();
-            Box::new(iter)
+        fn lines(&mut self, stop: &str) -> Vec<String> {
+            let mut lines = Vec::new();
+            for line in self.lines_to_read.iter().cloned() {
+                lines.push(line.clone());
+                if line.starts_with(stop) {
+                    break;
+                }
+            }
+            lines
         }
     }
 
