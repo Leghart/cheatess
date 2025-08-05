@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use subprocess::{Popen, PopenConfig, Redirection};
 
-pub trait Process {
+pub trait Process: Send {
     fn write_line(&mut self, msg: &str);
     fn read_line(&mut self) -> String;
     fn lines(&mut self, stop: &str) -> Vec<String>;
