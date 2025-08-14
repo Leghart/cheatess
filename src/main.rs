@@ -33,11 +33,10 @@ fn game(args: utils::parser::CheatessArgs) {
     let monitor =
         utils::monitor::select_monitor(args.monitor.number).expect("Requested monitor not found");
     let raw = utils::monitor::capture_entire_screen(&monitor);
-    let entire_screen_gray = core::procimg::image_buffer_to_gray_mat(&raw).unwrap();
-    let coords = core::procimg::get_board_region(&entire_screen_gray);
+    let raw_gray = core::procimg::image_buffer_to_gray_mat(&raw).unwrap();
 
-    let cropped = core::procimg::crop_image(&raw, &coords);
-    let board = core::procimg::image_buffer_to_gray_mat(&cropped).unwrap();
+    let coords = core::procimg::get_board_region(&raw_gray);
+    let board = core::procimg::crop_mat(&raw_gray, &coords);
 
     let player_color = core::procimg::detect_player_color(&board);
     log::info!("Detected player color: {player_color:?}");
@@ -153,12 +152,11 @@ fn config_mode(args: utils::parser::CheatessArgs) -> Result<(), Box<dyn std::err
     let monitor =
         utils::monitor::select_monitor(args.monitor.number).expect("Requested monitor not found");
     let raw = utils::monitor::capture_entire_screen(&monitor);
-    let entire_screen_gray = core::procimg::image_buffer_to_gray_mat(&raw).unwrap();
-    core::procimg::show(&entire_screen_gray, true, "Entire screen")?;
+    let raw_gray = core::procimg::image_buffer_to_gray_mat(&raw).unwrap();
+    core::procimg::show(&raw_gray, true, "Entire screen")?;
 
-    let coords = core::procimg::get_board_region(&entire_screen_gray);
-    let cropped = core::procimg::crop_image(&raw, &coords);
-    let board = core::procimg::image_buffer_to_gray_mat(&cropped).unwrap();
+    let coords = core::procimg::get_board_region(&raw_gray);
+    let board = core::procimg::crop_mat(&raw_gray, &coords);
     core::procimg::show(&board, true, "Cropped board")?;
 
     let player_color = core::procimg::detect_player_color(&board);

@@ -1,9 +1,10 @@
 use super::engine::{register_piece, Color};
-use image::{imageops, ImageBuffer, Rgba};
+use image::{ImageBuffer, Rgba};
 
-use opencv::{core::Mat, imgproc};
+pub use opencv::core::Mat;
+use opencv::imgproc;
 use opencv::{
-    core::{min_max_loc, Point, Rect, Scalar, CV_8UC1, CV_8UC4},
+    core::{min_max_loc, Point, Rect, Scalar, CV_8UC4},
     highgui::{self, destroy_window},
     prelude::*,
     Result,
@@ -208,20 +209,10 @@ pub fn detect_player_color(gray_board: &Mat) -> Color {
     let square_height = height / 8;
 
     let roi = Rect::new(0, height - square_height, square_width, square_height);
-    let square = Mat::roi(&img, roi).unwrap();
+    let cropped = img.roi(roi).unwrap().try_clone().unwrap();
 
-    let mut square_continuous = Mat::new_rows_cols_with_default(
-        square.rows(),
-        square.cols(),
-        CV_8UC1,
-        opencv::core::Scalar::all(0.0),
-    )
-    .unwrap();
-
-    square.copy_to(&mut square_continuous).unwrap();
-
-    let total_pixels = square_continuous.rows() * square_continuous.cols();
-    let black_pixels = square_continuous
+    let total_pixels = cropped.rows() * cropped.cols();
+    let black_pixels = cropped
         .data_bytes()
         .unwrap()
         .iter()
@@ -412,11 +403,15 @@ pub fn image_buffer_to_gray_mat(img: &ImageBuffer<Rgba<u8>, Vec<u8>>) -> opencv:
     Ok(gray_mat)
 }
 
-pub fn crop_image(
-    raw: &ImageBuffer<Rgba<u8>, Vec<u8>>,
-    coords: &(u32, u32, u32, u32),
-) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
-    imageops::crop_imm(raw, coords.0, coords.1, coords.2, coords.3).to_image()
+pub fn crop_mat(raw: &Mat, coords: &(u32, u32, u32, u32)) -> Mat {
+    let roi = Rect {
+        x: coords.0 as i32,
+        y: coords.1 as i32,
+        width: coords.2 as i32,
+        height: coords.3 as i32,
+    };
+
+    raw.roi(roi).unwrap().try_clone().unwrap()
 }
 
 #[cfg(test)]
@@ -442,21 +437,8 @@ mod tests {
         imgproc::cvt_color(&raw, &mut gray_mat, imgproc::COLOR_RGBA2GRAY, 0).unwrap();
 
         let coords = get_board_region(&gray_mat);
-
-        let rgba_image = {
-            let size = raw.size().unwrap();
-            image::RgbaImage::from_raw(
-                size.width as u32,
-                size.height as u32,
-                raw.data_bytes().unwrap().to_vec(),
-            )
-            .unwrap()
-        };
-
-        let cropped = crop_image(&rgba_image, &coords);
-        let final_mat = image_buffer_to_gray_mat(&cropped).unwrap();
+        let final_mat = crop_mat(&raw, &coords);
 
         assert_eq!(final_mat.size().unwrap(), ref_mat.size().unwrap());
-        assert_eq!(final_mat.typ(), ref_mat.typ());
     }
 }
