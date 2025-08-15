@@ -32,13 +32,12 @@ fn game(args: utils::parser::CheatessArgs) {
 
     let monitor =
         utils::monitor::select_monitor(args.monitor.number).expect("Requested monitor not found");
-    let raw = utils::monitor::capture_entire_screen(&monitor);
-    let raw_gray = core::procimg::image_buffer_to_gray_mat(&raw).unwrap();
+    let raw = utils::monitor::capture_entire_screen(&monitor); // ~30ms
+    let raw_gray = core::procimg::image_buffer_to_gray_mat(raw).unwrap(); // ~5ms
+    let coords = core::procimg::get_board_region(&raw_gray); // ~10ms
 
-    let coords = core::procimg::get_board_region(&raw_gray);
-    let board = core::procimg::crop_mat(&raw_gray, &coords);
-
-    let player_color = core::procimg::detect_player_color(&board);
+    let board = core::procimg::crop_mat(&raw_gray, &coords); // ~1ms
+    let player_color = core::procimg::detect_player_color(&board); // ~0.1ms
     log::info!("Detected player color: {player_color:?}");
 
     let base_board: Box<dyn core::engine::AnyBoard> = if args.engine.pretty {
@@ -69,8 +68,8 @@ fn game(args: utils::parser::CheatessArgs) {
     loop {
         let start = Instant::now();
         let cropped =
-            utils::monitor::get_cropped_screen(&monitor, coords.0, coords.1, coords.2, coords.3); // ~25ms
-        let gray_board = core::procimg::image_buffer_to_gray_mat(&cropped).unwrap(); // ~20ms
+            utils::monitor::get_cropped_screen(&monitor, coords.0, coords.1, coords.2, coords.3); // ~15ms
+        let gray_board = core::procimg::image_buffer_to_gray_mat(cropped).unwrap(); // ~1ms
 
         if !core::procimg::are_images_different(
             &prev_board_mat,
@@ -152,7 +151,7 @@ fn config_mode(args: utils::parser::CheatessArgs) -> Result<(), Box<dyn std::err
     let monitor =
         utils::monitor::select_monitor(args.monitor.number).expect("Requested monitor not found");
     let raw = utils::monitor::capture_entire_screen(&monitor);
-    let raw_gray = core::procimg::image_buffer_to_gray_mat(&raw).unwrap();
+    let raw_gray = core::procimg::image_buffer_to_gray_mat(raw).unwrap();
     core::procimg::show(&raw_gray, true, "Entire screen")?;
 
     let coords = core::procimg::get_board_region(&raw_gray);
@@ -213,7 +212,7 @@ fn config_mode(args: utils::parser::CheatessArgs) -> Result<(), Box<dyn std::err
     let prev_board_arr = calc_board;
     let new_cropped =
         utils::monitor::get_cropped_screen(&monitor, coords.0, coords.1, coords.2, coords.3);
-    let new_board = core::procimg::image_buffer_to_gray_mat(&new_cropped).unwrap();
+    let new_board = core::procimg::image_buffer_to_gray_mat(new_cropped).unwrap();
 
     if !core::procimg::are_images_different(
         &prev_board,
