@@ -125,22 +125,37 @@ The program will begin monitoring your screen for chess activity. When it detect
 You can use the prebuilt image with the core logic by running:
 
 ```
-docker pull leghart/cheatess_prod:latest
+docker pull leghart/cheatess-core:latest
 ```
 
 Alternatively, you can build it manually with:
 
 ```
-docker build -f docker/Dockerfile.prod -t cheatess_prod .
+docker build -f docker/Dockerfile.prod -t cheatess-core .
 ```
 
-To use the image, you can run `scripts/start_core.sh` or manually execute
+Image usage:
 
 ```
-docker run -it -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix cheatess_prod <flags>
+xhost +local:root 1>/dev/null 2>/dev/null; docker run -it -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix leghart/cheatess-core:latest --mode <test|game> stockfish -p /usr/games/stockfish <flags>
 ```
 
-The argument with path to stockfish binary is automatically applied inside image.
+You can manually prepare script to run it, for example:
+
+```bash
+#!/bin/bash
+
+xhost +local:root 1>/dev/null 2>/dev/null
+
+mode="$1"
+shift
+docker run -it \
+    -e DISPLAY=$DISPLAY \
+    -v /tmp/.X11-unix:/tmp/.X11-unix \
+    cheatess-core \
+    --mode "$mode" \
+    "stockfish -p /usr/games/stockfish" "$@"
+```
 
 # Recommendations
 
