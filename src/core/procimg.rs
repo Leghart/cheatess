@@ -4,7 +4,7 @@ use image::{ImageBuffer, Rgba};
 pub use opencv::core::Mat;
 use opencv::imgproc;
 use opencv::{
-    core::{min_max_loc, Mat_AUTO_STEP, Point, Rect, Scalar, CV_8UC4},
+    core::{min_max_loc, Point, Rect, Scalar, CV_8UC4},
     highgui::{self, destroy_window},
     prelude::*,
     Result,
@@ -391,15 +391,11 @@ pub fn extract_pieces(
 
 pub fn image_buffer_to_gray_mat(img: ImageBuffer<Rgba<u8>, Vec<u8>>) -> opencv::Result<Mat> {
     let (width, height) = img.dimensions();
-    let mat = unsafe {
-        Mat::new_rows_cols_with_data_unsafe(
-            height as i32,
-            width as i32,
-            CV_8UC4,
-            img.into_raw().as_ptr() as *mut _,
-            Mat_AUTO_STEP,
-        )?
-    };
+    let mut mat =
+        Mat::new_rows_cols_with_default(height as i32, width as i32, CV_8UC4, Scalar::all(0.0))?;
+
+    let mat_data = mat.data_bytes_mut()?;
+    mat_data.copy_from_slice(img.as_raw());
 
     let mut gray_mat = Mat::default();
     imgproc::cvt_color(&mat, &mut gray_mat, imgproc::COLOR_RGBA2GRAY, 0)?;
