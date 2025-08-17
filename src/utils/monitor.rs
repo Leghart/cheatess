@@ -1,5 +1,5 @@
 use image::{ImageBuffer, Rgba};
-use xcap::Monitor;
+pub use xcap::Monitor;
 
 #[allow(clippy::if_same_then_else)]
 pub fn select_monitor(primary: u8) -> Result<Monitor, Box<dyn std::error::Error>> {
