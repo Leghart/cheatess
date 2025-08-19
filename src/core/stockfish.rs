@@ -394,8 +394,9 @@ impl Stockfish {
     }
 
     fn try_get_general_best_move(&mut self, data: &[String]) -> Option<String> {
+        let re = Regex::new("bestmove").unwrap();
         for line in data.iter().rev() {
-            if Regex::new("bestmove").unwrap().is_match(line) {
+            if re.is_match(line) {
                 let splitted: Vec<&str> = line.split_whitespace().collect();
 
                 if splitted[1] == "(none)" || splitted.len() <= 1 {

@@ -123,7 +123,7 @@ fn game(args: utils::parser::CheatessArgs) {
         curr_board.print(&mut stdout);
 
         for (i, sum) in sf.summary(args.stockfish.pv).iter().enumerate() {
-            if sum.best_lines.len() == 0 {
+            if sum.best_lines.is_empty() {
                 log::info!("Game over");
                 return;
             }
