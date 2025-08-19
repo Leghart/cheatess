@@ -59,6 +59,10 @@ pub struct StockfishArgs {
     #[arg(long, default_value_t = 16)]
     /// Memory size of the stockfish engine in MB
     pub hash: usize,
+
+    #[arg(long, default_value_t = 1)]
+    /// Number of best lines to show (best performance for =1)
+    pub pv: usize,
 }
 
 #[derive(Debug, Clone, Parser)]

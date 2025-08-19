@@ -352,6 +352,7 @@ dependencies = [
  "image",
  "log",
  "opencv",
+ "regex",
  "rstest",
  "subprocess",
  "text-colorizer",

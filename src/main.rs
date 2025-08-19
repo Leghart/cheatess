@@ -28,6 +28,7 @@ fn game(args: utils::parser::CheatessArgs) {
         &args.stockfish.elo.to_string(),
         &args.stockfish.skill.to_string(),
         &args.stockfish.hash.to_string(),
+        &args.stockfish.pv.to_string(),
     );
 
     let monitor =
@@ -61,9 +62,11 @@ fn game(args: utils::parser::CheatessArgs) {
 
     let mut prev_board_mat = board;
     let mut prev_board_arr = base_board;
-    let best_move = sf.get_best_move().unwrap();
-    log::info!("Stockfish best move: {best_move}");
-    log::info!("Evaluation: {:?}", sf.get_evaluation());
+    for (i, sum) in sf.summary(args.stockfish.pv).iter().enumerate() {
+        log::info!("====== {i} stockfish line =======");
+        log::info!("Evaluation: {:?}", sum.eval);
+        log::info!("Best moves: {:?}", sum.best_lines);
+    }
 
     loop {
         let start = Instant::now();
@@ -119,15 +122,14 @@ fn game(args: utils::parser::CheatessArgs) {
         };
         curr_board.print(&mut stdout);
 
-        match sf.get_best_move() {
-            Some(best) => {
-                log::info!("Stockfish best move: {best}");
-                log::info!("Evaluation: {:?}", sf.get_evaluation());
-            }
-            None => {
+        for (i, sum) in sf.summary(args.stockfish.pv).iter().enumerate() {
+            if sum.best_lines.is_empty() {
                 log::info!("Game over");
-                break;
+                return;
             }
+            log::info!("====== {i} stockfish line =======");
+            log::info!("Evaluation: {:?}", sum.eval);
+            log::info!("Best moves: {:?}", sum.best_lines);
         }
 
         prev_board_arr = curr_board;
