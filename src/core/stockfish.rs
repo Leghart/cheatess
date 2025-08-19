@@ -242,7 +242,24 @@ impl Stockfish {
                             .collect::<Vec<_>>(),
                     );
                 }
+
+                break;
             }
+        }
+
+        if eval.is_none() && pvs.is_none() {
+            eval = Some("--".to_string());
+
+            pvs = match self.try_get_general_best_move(data) {
+                Some(best) => Some(vec![best]),
+                None => {
+                    log::error!(
+                        r"Not found match to: info depth {}\s+.*multipv {nth_line}",
+                        self.depth
+                    );
+                    Some(Vec::new())
+                }
+            };
         }
 
         (
@@ -285,11 +302,6 @@ impl Stockfish {
             ("UCI_LimitStrength", "true"),
             ("UCI_Elo", &rating.to_string()),
         ]));
-    }
-
-    pub fn get_best_move(&mut self) -> Option<String> {
-        self._go();
-        self.get_move_from_proc()
     }
 
     pub fn make_move(&mut self, moves: Vec<String>) {
@@ -381,27 +393,17 @@ impl Stockfish {
         self.info = String::new();
     }
 
-    fn get_move_from_proc(&mut self) -> Option<String> {
-        let mut last_text = String::new();
+    fn try_get_general_best_move(&mut self, data: &[String]) -> Option<String> {
+        for line in data.iter().rev() {
+            if Regex::new("bestmove").unwrap().is_match(line) {
+                let splitted: Vec<&str> = line.split_whitespace().collect();
 
-        for text in self.proc.lines(&Regex::new("bestmove").unwrap()) {
-            let splitted: Vec<&str> = text.split_whitespace().collect();
-            if splitted.is_empty() {
-                continue;
-            }
-
-            if splitted[0] == "bestmove" {
-                self.info = last_text;
-                if splitted.len() > 1 && splitted[1] == "(none)" {
-                    return None;
-                } else if splitted.len() > 1 {
-                    return Some(splitted[1].to_string());
-                } else {
+                if splitted[1] == "(none)" || splitted.len() <= 1 {
                     return None;
                 }
-            }
 
-            last_text = text;
+                return Some(splitted[1].to_string());
+            }
         }
         None
     }
@@ -424,7 +426,8 @@ impl Stockfish {
     fn is_correct_move(&mut self, _move: &str) -> bool {
         let old_info = self.info.clone();
         self._put(&format!("go depth 1 searchmoves {_move}"));
-        let result = self.get_move_from_proc().is_some();
+        let data = self.proc.lines(&Regex::new("bestmove").unwrap());
+        let result = self.try_get_general_best_move(&data).is_some();
         self.info = old_info;
         result
     }
@@ -545,44 +548,6 @@ mod tests {
             fen,
             "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
         );
-    }
-
-    #[test]
-    fn get_best_move_returns_correct_move() {
-        let mut mock = MockProcess::new();
-
-        mock.push_read_line("uciok");
-        mock.push_read_line("info depth 10 score cp 20");
-        mock.push_read_line("bestmove e2e4");
-
-        let mut sf = Stockfish::new_with_process(Box::new(mock), 1);
-
-        let best_move = sf.get_best_move();
-
-        assert_eq!(best_move, Some("e2e4".to_string()));
-
-        let proc = sf.proc.as_any().downcast_ref::<MockProcess>().unwrap();
-        assert!(proc
-            .written_lines
-            .iter()
-            .any(|cmd| cmd.starts_with("go depth")));
-    }
-
-    #[test]
-    fn get_move_from_proc_returns_bestmove() {
-        let mut mock = MockProcess::new();
-        mock.push_read_line("Stockfish 17 by Mock");
-        mock.push_read_line("readyok");
-        mock.push_read_line("info depth 10 score cp 13");
-        mock.push_read_line("bestmove e2e4");
-        mock.push_read_line("readyok");
-
-        let mut sf = Stockfish::new_with_process(Box::new(mock), 1);
-
-        let best_move = sf.get_move_from_proc();
-
-        assert_eq!(best_move, Some("e2e4".to_string()));
-        assert_eq!(sf.info, "info depth 10 score cp 13");
     }
 
     #[test]
@@ -970,22 +935,40 @@ mod tests {
         assert_eq!(pv, vec!["d1d2".to_string()]);
     }
 
-    #[ignore = "to fix"]
     #[test]
     fn get_evaluation_returns_zero_if_no_score() {
-        // let mut mock = MockProcess::new();
+        let mut mock = MockProcess::new();
 
-        // mock.push_read_line("Stockfish 17 by Mock");
-        // mock.push_read_line("readyok");
+        mock.push_read_line("Stockfish 17 by Mock");
+        mock.push_read_line("readyok");
 
-        // mock.push_read_line("Fen: 8/8/8/8/8/8/K1k5/8 w - - 0 1");
+        mock.push_read_line("Fen: 8/8/8/8/8/8/K1k5/8 w - - 0 1");
 
-        // mock.push_read_line("bestmove a1a1");
+        let data = ["".to_string()];
 
-        // let mut sf = Stockfish::new_with_process(Box::new(mock), 1);
+        let mut sf = Stockfish::new_with_process(Box::new(mock), 11);
 
-        // let eval = sf.get_evaluation();
+        let (eval, pv) = sf.extract_values(&data, 1, -1.0);
 
-        // assert_eq!(eval, "0".to_string());
+        assert_eq!(eval, "--".to_string());
+        assert_eq!(pv, Vec::<String>::new());
+    }
+
+    #[test]
+    fn get_extract_values_try_get_general_best_move() {
+        let mut mock = MockProcess::new();
+
+        mock.push_read_line("Stockfish 17 by Mock");
+        mock.push_read_line("readyok");
+        mock.push_read_line("Fen: 8/8/8/8/8/8/K1k5/8 w - - 0 1");
+
+        let data = ["bestmove e2e4".to_string()];
+
+        let mut sf = Stockfish::new_with_process(Box::new(mock), 1);
+
+        let (eval, pv) = sf.extract_values(&data, 1, 1.0);
+
+        assert_eq!(eval, "--".to_string());
+        assert_eq!(pv, vec!["e2e4"]);
     }
 }
