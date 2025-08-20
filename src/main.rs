@@ -5,13 +5,11 @@ use std::time::Instant;
 mod core;
 mod utils;
 
-static LOGGER: utils::logger::Logger = utils::logger::Logger;
-
 fn main() {
     let env_args: Vec<String> = std::env::args().collect();
     let args = utils::parser::parse_args_from(env_args);
 
-    utils::logger::init(&args.verbose.log_level_filter());
+    utils::logger::init_stdout(args.verbose.log_level_filter());
 
     match args.mode {
         utils::parser::Mode::Game => game(args),
