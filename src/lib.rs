@@ -11,5 +11,3 @@ pub use utils::parser;
 
 #[allow(unused_imports)]
 pub use utils::printer;
-
-static LOGGER: utils::logger::Logger = utils::logger::Logger;
