@@ -3,6 +3,7 @@
 // transform data to stockfish format etc.
 use std::io::Write;
 
+use crate::utils::error::{CheatessError, CheatessResult};
 pub use crate::utils::printer::{
     AnyBoard, BlackView, DefaultPrinter, PrettyPrinter, Printer, View, WhiteView,
 };
@@ -129,7 +130,7 @@ pub fn register_piece(
     board_size: (i32, i32),
     piece: char,
     board: &mut [[char; 8]; 8],
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> CheatessResult<()> {
     let tile_width = board_size.0 / 8;
     let tile_height = board_size.1 / 8;
 
@@ -175,7 +176,7 @@ pub enum MoveType {
 pub fn get_coords_moved_pieces(
     before: &[[char; 8]; 8],
     after: &[[char; 8]; 8],
-) -> Result<Vec<DiffSquare>, Box<dyn std::error::Error>> {
+) -> CheatessResult<Vec<DiffSquare>> {
     static MAX_MOVES: usize = 4;
     let mut changes: Vec<DiffSquare> = Vec::with_capacity(MAX_MOVES);
 
@@ -190,7 +191,7 @@ pub fn get_coords_moved_pieces(
                         piece_after: after[row][col],
                     })
                 } else {
-                    return Err("Too much position detected".into());
+                    return Err(CheatessError::TooManyPositionChanges);
                 }
             }
         }
@@ -202,7 +203,7 @@ pub fn detect_move(
     before: &[[char; 8]; 8],
     after: &[[char; 8]; 8],
     player_color: &Color,
-) -> Result<(String, MoveType), Box<dyn std::error::Error>> {
+) -> CheatessResult<(String, MoveType)> {
     let from: Option<(usize, usize)>;
     let mut to: Option<(usize, usize)> = None;
     let mut move_type: MoveType = MoveType::Unknown;
@@ -292,7 +293,7 @@ pub fn detect_move(
             move_type = MoveType::Castle;
         }
         x => {
-            return Err(format!("invalid amount of moves: {x}").into());
+            return Err(CheatessError::InvalidAmountOfMoves(x));
         }
     }
 

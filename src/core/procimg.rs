@@ -1,4 +1,5 @@
 use super::engine::{register_piece, Color};
+use crate::utils::error::CheatessResult;
 use image::{ImageBuffer, Rgba};
 
 pub use opencv::core::Mat;
@@ -7,7 +8,6 @@ use opencv::{
     core::{min_max_loc, Point, Rect, Scalar, CV_8UC4},
     highgui::{self, destroy_window},
     prelude::*,
-    Result,
 };
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -42,7 +42,7 @@ static BLACK_NAMED_FIELDS: [((usize, usize), char); 12] = [
     ((4, 7), 'q'),
 ];
 
-pub fn show(image: &Mat, destroy: bool, title: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub fn show(image: &Mat, destroy: bool, title: &str) -> CheatessResult<()> {
     highgui::imshow(title, &image)?;
     loop {
         if highgui::wait_key(0)? == 48 {
@@ -55,7 +55,7 @@ pub fn show(image: &Mat, destroy: bool, title: &str) -> Result<(), Box<dyn std::
     Ok(())
 }
 
-pub fn convert_board_to_bin(gray_board: &Mat, board_threshold: f64) -> Mat {
+pub fn convert_board_to_bin(gray_board: &Mat, board_threshold: f64) -> CheatessResult<Mat> {
     let mut bin_board = Mat::default();
     imgproc::threshold(
         &gray_board,
@@ -63,10 +63,9 @@ pub fn convert_board_to_bin(gray_board: &Mat, board_threshold: f64) -> Mat {
         board_threshold,
         255.0,
         imgproc::THRESH_BINARY,
-    )
-    .unwrap();
+    )?;
 
-    bin_board
+    Ok(bin_board)
 }
 
 /// Finds all chess pieces on the board by performing template matching for each piece.
@@ -78,8 +77,8 @@ pub fn find_all_pieces(
     pieces: &std::collections::HashMap<char, Arc<Mat>>,
     piece_threshold: f64,
     board_threshold: f64,
-) -> [[char; 8]; 8] {
-    let bin_board = convert_board_to_bin(gray_board, board_threshold);
+) -> CheatessResult<[[char; 8]; 8]> {
+    let bin_board = convert_board_to_bin(gray_board, board_threshold)?;
 
     let result = Arc::new(Mutex::new([[' '; 8]; 8]));
     let bin_board = Arc::new(bin_board);
@@ -92,7 +91,8 @@ pub fn find_all_pieces(
         let sign = *sign;
 
         let handle = thread::spawn(move || {
-            let local_result = find_piece_location(&board, &piece, piece_threshold, sign).unwrap();
+            let local_result = find_piece_location(&board, &piece, piece_threshold, sign)
+                .expect("Failed to find piece location");
 
             let mut res = result_ref.lock().unwrap();
             for row in 0..8 {
@@ -110,8 +110,8 @@ pub fn find_all_pieces(
     for handle in handles {
         handle.join().unwrap();
     }
-    let new_data = *result.lock().unwrap();
-    new_data
+    let out = *result.lock().unwrap();
+    Ok(out)
 }
 
 /// Both images (board and piece) are already binary thresholded, so mask is not needed.
@@ -120,7 +120,7 @@ fn find_piece_location(
     piece_image: &Mat,
     threshold: f64,
     symbol: char,
-) -> Result<[[char; 8]; 8], Box<dyn std::error::Error>> {
+) -> CheatessResult<[[char; 8]; 8]> {
     let mut result: [[char; 8]; 8] = [[' '; 8]; 8];
     let empty_mask = Mat::default();
 
@@ -191,7 +191,7 @@ fn find_piece_location(
     Ok(result)
 }
 
-pub fn detect_player_color(gray_board: &Mat) -> Color {
+pub fn detect_player_color(gray_board: &Mat) -> CheatessResult<Color> {
     let mut bin_board = Mat::default();
     imgproc::threshold(
         &gray_board,
@@ -199,8 +199,7 @@ pub fn detect_player_color(gray_board: &Mat) -> Color {
         50.0,
         255.0,
         imgproc::THRESH_BINARY,
-    )
-    .unwrap();
+    )?;
 
     let img = bin_board;
     let width = img.cols();
@@ -209,7 +208,7 @@ pub fn detect_player_color(gray_board: &Mat) -> Color {
     let square_height = height / 8;
 
     let roi = Rect::new(0, height - square_height, square_width, square_height);
-    let cropped = img.roi(roi).unwrap().try_clone().unwrap();
+    let cropped = img.roi(roi).unwrap().try_clone()?;
 
     let total_pixels = cropped.rows() * cropped.cols();
     let black_pixels = cropped
@@ -223,9 +222,9 @@ pub fn detect_player_color(gray_board: &Mat) -> Color {
 
     // white rook: 0.14, black rook: 0.26
     if black_ratio > 0.2 {
-        Color::Black
+        Ok(Color::Black)
     } else {
-        Color::White
+        Ok(Color::White)
     }
 }
 
@@ -234,9 +233,9 @@ pub fn detect_player_color(gray_board: &Mat) -> Color {
 /// - apply Canny edge detection to find the edges
 /// - find contours in the edge-detected image
 /// - approximate the contours to find quadrilaterals
-pub fn get_board_region(gray: &Mat) -> (u32, u32, u32, u32) {
+pub fn get_board_region(gray: &Mat) -> CheatessResult<(u32, u32, u32, u32)> {
     let mut edges = Mat::default();
-    imgproc::canny(&gray, &mut edges, 50.0, 150.0, 3, false).unwrap();
+    imgproc::canny(&gray, &mut edges, 50.0, 150.0, 3, false)?;
 
     let mut contours = opencv::core::Vector::<opencv::core::Vector<Point>>::new();
     imgproc::find_contours(
@@ -245,8 +244,7 @@ pub fn get_board_region(gray: &Mat) -> (u32, u32, u32, u32) {
         imgproc::RETR_EXTERNAL,
         imgproc::CHAIN_APPROX_SIMPLE,
         Point::new(0, 0),
-    )
-    .unwrap();
+    )?;
 
     let mut max_area = 0.0;
     let mut best_quad = vec![];
@@ -256,14 +254,13 @@ pub fn get_board_region(gray: &Mat) -> (u32, u32, u32, u32) {
         imgproc::approx_poly_dp(
             &contour,
             &mut approx,
-            0.02 * imgproc::arc_length(&contour, true).unwrap(),
+            0.02 * imgproc::arc_length(&contour, true)?,
             true,
-        )
-        .unwrap();
+        )?;
 
-        if approx.len() == 4 && imgproc::is_contour_convex(&approx).unwrap() {
-            let area = imgproc::contour_area(&approx, false).unwrap();
-            let bounding = imgproc::bounding_rect(&approx).unwrap();
+        if approx.len() == 4 && imgproc::is_contour_convex(&approx)? {
+            let area = imgproc::contour_area(&approx, false)?;
+            let bounding = imgproc::bounding_rect(&approx)?;
 
             let aspect_ratio = bounding.width as f32 / bounding.height as f32;
             if area > max_area && aspect_ratio > 0.8 && aspect_ratio < 1.2 {
@@ -285,11 +282,11 @@ pub fn get_board_region(gray: &Mat) -> (u32, u32, u32, u32) {
         x_start,y_start+height,
         x_start+width,y_start+height
     );
-    (x_start, y_start, width, height)
+    Ok((x_start, y_start, width, height))
 }
 
 /// Checks if two images have differences in their 8x8 grid cells.
-pub fn are_images_different(gray1: &Mat, gray2: &Mat, threshold: i32) -> bool {
+pub fn are_images_different(gray1: &Mat, gray2: &Mat, threshold: i32) -> CheatessResult<bool> {
     let cell_w = gray1.cols() / 8;
     let cell_h = gray1.rows() / 8;
 
@@ -302,8 +299,8 @@ pub fn are_images_different(gray1: &Mat, gray2: &Mat, threshold: i32) -> bool {
             let height = if row == 7 { gray1.rows() - y } else { cell_h };
 
             let roi = Rect::new(x, y, width, height);
-            let patch1 = Mat::roi(gray1, roi).unwrap();
-            let patch2 = Mat::roi(gray2, roi).unwrap();
+            let patch1 = Mat::roi(gray1, roi)?;
+            let patch2 = Mat::roi(gray2, roi)?;
 
             let mut thresh1 = Mat::default();
             imgproc::threshold(
@@ -312,8 +309,7 @@ pub fn are_images_different(gray1: &Mat, gray2: &Mat, threshold: i32) -> bool {
                 50.0,
                 255.0,
                 imgproc::THRESH_BINARY_INV,
-            )
-            .unwrap();
+            )?;
 
             let mut thresh2 = Mat::default();
             imgproc::threshold(
@@ -322,19 +318,18 @@ pub fn are_images_different(gray1: &Mat, gray2: &Mat, threshold: i32) -> bool {
                 50.0,
                 255.0,
                 imgproc::THRESH_BINARY_INV,
-            )
-            .unwrap();
+            )?;
 
-            let nonzero1 = opencv::core::count_non_zero(&thresh1).unwrap();
-            let nonzero2 = opencv::core::count_non_zero(&thresh2).unwrap();
+            let nonzero1 = opencv::core::count_non_zero(&thresh1)?;
+            let nonzero2 = opencv::core::count_non_zero(&thresh2)?;
 
             if (nonzero1 > threshold) != (nonzero2 > threshold) {
-                return true;
+                return Ok(true);
             }
         }
     }
 
-    false
+    Ok(false)
 }
 
 pub fn extract_pieces(
@@ -342,7 +337,7 @@ pub fn extract_pieces(
     margin: u8,
     extract_piece_threshold: f64,
     player_color: &Color,
-) -> Result<std::collections::HashMap<char, Mat>, Box<dyn std::error::Error>> {
+) -> CheatessResult<std::collections::HashMap<char, Mat>> {
     let board_size: i32 = img.rows().min(img.cols());
     let board_size_f = board_size as f32;
 
@@ -389,7 +384,7 @@ pub fn extract_pieces(
     Ok(result)
 }
 
-pub fn image_buffer_to_gray_mat(img: ImageBuffer<Rgba<u8>, Vec<u8>>) -> opencv::Result<Mat> {
+pub fn image_buffer_to_gray_mat(img: ImageBuffer<Rgba<u8>, Vec<u8>>) -> CheatessResult<Mat> {
     let (width, height) = img.dimensions();
     let mut mat =
         Mat::new_rows_cols_with_default(height as i32, width as i32, CV_8UC4, Scalar::all(0.0))?;
@@ -402,7 +397,7 @@ pub fn image_buffer_to_gray_mat(img: ImageBuffer<Rgba<u8>, Vec<u8>>) -> opencv::
     Ok(gray_mat)
 }
 
-pub fn crop_mat(raw: &Mat, coords: &(u32, u32, u32, u32)) -> Mat {
+pub fn crop_mat(raw: &Mat, coords: &(u32, u32, u32, u32)) -> CheatessResult<Mat> {
     let roi = Rect {
         x: coords.0 as i32,
         y: coords.1 as i32,
@@ -410,7 +405,7 @@ pub fn crop_mat(raw: &Mat, coords: &(u32, u32, u32, u32)) -> Mat {
         height: coords.3 as i32,
     };
 
-    raw.roi(roi).unwrap().try_clone().unwrap()
+    Ok(raw.roi(roi)?.try_clone()?)
 }
 
 #[cfg(test)]
@@ -435,8 +430,8 @@ mod tests {
         let mut gray_mat = Mat::default();
         imgproc::cvt_color(&raw, &mut gray_mat, imgproc::COLOR_RGBA2GRAY, 0).unwrap();
 
-        let coords = get_board_region(&gray_mat);
-        let final_mat = crop_mat(&raw, &coords);
+        let coords = get_board_region(&gray_mat).unwrap();
+        let final_mat = crop_mat(&raw, &coords).unwrap();
 
         assert_eq!(final_mat.size().unwrap(), ref_mat.size().unwrap());
     }
