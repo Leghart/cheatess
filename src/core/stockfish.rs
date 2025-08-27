@@ -1,3 +1,4 @@
+use crate::utils::error::CheatessResult;
 use regex::Regex;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
@@ -141,7 +142,13 @@ impl Stockfish {
         _self
     }
 
-    pub fn set_config(&mut self, elo: &str, skill: &str, hash: &str, multi_lines: &str) {
+    pub fn set_config(
+        &mut self,
+        elo: &str,
+        skill: &str,
+        hash: &str,
+        multi_lines: &str,
+    ) -> CheatessResult<()> {
         let default_params: HashMap<&str, &str> = HashMap::from_iter([
             ("Debug Log File", ""),
             // ("Threads", "1"),
@@ -156,18 +163,19 @@ impl Stockfish {
             ("UCI_ShowWDL", "true"),
         ]);
 
-        self.update_params(default_params);
+        self.update_params(default_params)?;
+        Ok(())
     }
 
     //TODO: fix
     //TODO: add tests
-    pub fn get_wdl_stats(&mut self) -> [usize; 3] {
-        let fen_position = self.get_fen_position();
+    pub fn get_wdl_stats(&mut self) -> CheatessResult<[usize; 3]> {
+        let fen_position = self.get_fen_position()?;
         self._put(&format!("position {fen_position}"));
         self._go();
 
         let mut result = [0; 3];
-        for line in self.proc.lines(&Regex::new("bestmove").unwrap()) {
+        for line in self.proc.lines(&Regex::new("bestmove")?) {
             let parts: Vec<&str> = line.split_whitespace().collect();
             if parts.is_empty() {
                 continue;
@@ -188,7 +196,7 @@ impl Stockfish {
                 }
             }
         }
-        result
+        Ok(result)
     }
 
     pub fn extract_values(
@@ -196,15 +204,14 @@ impl Stockfish {
         data: &[String],
         nth_line: usize,
         color_scalar: f32,
-    ) -> (String, Vec<String>) {
+    ) -> CheatessResult<(String, Vec<String>)> {
         let mut pvs: Option<Vec<String>> = None;
         let mut eval: Option<String> = None;
         for line in data.iter().rev() {
             if Regex::new(&format!(
                 r"info depth {}\s+.*multipv {}",
                 self.depth, nth_line
-            ))
-            .unwrap()
+            ))?
             .is_match(line)
             {
                 let parts: Vec<&str> = line.split_whitespace().collect();
@@ -262,14 +269,14 @@ impl Stockfish {
             };
         }
 
-        (
+        Ok((
             eval.expect("evaluation is None"),
             pvs.expect("multipv is None"),
-        )
+        ))
     }
 
-    pub fn summary(&mut self, search_lines: usize) -> Vec<Summary> {
-        let fen_position = self.get_fen_position(); // to get current side
+    pub fn summary(&mut self, search_lines: usize) -> CheatessResult<Vec<Summary>> {
+        let fen_position = self.get_fen_position()?; // to get current side
 
         let color_scaler = if fen_position.contains('w') {
             1.0
@@ -280,52 +287,57 @@ impl Stockfish {
         self._put(&format!("position {fen_position}"));
         self._go();
 
-        let lines = self.proc.lines(&Regex::new("bestmove").unwrap());
+        let lines = self.proc.lines(&Regex::new("bestmove")?);
 
         let mut output: Vec<Summary> = Vec::with_capacity(search_lines);
         for nth in 1..=search_lines {
-            let (eval, best_lines) = self.extract_values(&lines, nth, color_scaler);
+            let (eval, best_lines) = self.extract_values(&lines, nth, color_scaler)?;
             output.push(Summary { eval, best_lines })
         }
-        output
+        Ok(output)
     }
 
-    pub fn set_skill_level(&mut self, level: usize) {
+    pub fn set_skill_level(&mut self, level: usize) -> CheatessResult<()> {
         self.update_params(HashMap::from_iter([
             ("UCI_LimitStrength", "false"),
             ("Skill level", &level.to_string()),
-        ]));
+        ]))?;
+
+        Ok(())
     }
 
-    pub fn set_elo_rating(&mut self, rating: usize) {
+    pub fn set_elo_rating(&mut self, rating: usize) -> CheatessResult<()> {
         self.update_params(HashMap::from_iter([
             ("UCI_LimitStrength", "true"),
             ("UCI_Elo", &rating.to_string()),
-        ]));
+        ]))?;
+
+        Ok(())
     }
 
-    pub fn make_move(&mut self, moves: Vec<String>) {
+    pub fn make_move(&mut self, moves: Vec<String>) -> CheatessResult<()> {
         if moves.is_empty() {
-            return;
+            return Ok(());
         }
 
         self.prepare_for_new_position(false);
 
         for _move in moves {
-            if !self.is_correct_move(&_move) {
+            if !self.is_correct_move(&_move)? {
                 let msg = format!(
                     "Move '{_move}' is not a valid move for current position or engine state."
                 );
                 panic!("{msg}");
             }
 
-            let pos = self.get_fen_position();
+            let pos = self.get_fen_position()?;
             self._put(&format!("position fen {pos} moves {_move}"));
         }
+        Ok(())
     }
 
     // TODO: fix threads
-    fn update_params(&mut self, new_param_values_p: HashMap<&str, &str>) {
+    fn update_params(&mut self, new_param_values_p: HashMap<&str, &str>) -> CheatessResult<()> {
         let mut new_param_values = new_param_values_p;
 
         if !self.parameters.is_empty() {
@@ -365,17 +377,19 @@ impl Stockfish {
             self.is_ready();
         }
 
-        let pos = self.get_fen_position();
+        let pos = self.get_fen_position()?;
         self.set_fen_position(&pos, false);
+
+        Ok(())
     }
 
-    fn get_fen_position(&mut self) -> String {
+    fn get_fen_position(&mut self) -> CheatessResult<String> {
         self._put("d");
 
-        let binding = self.proc.desired_line(&Regex::new("Fen").unwrap());
+        let binding = self.proc.desired_line(&Regex::new("Fen")?);
         let line = binding.trim();
         if line.contains("Fen: ") {
-            return line[5..].to_string();
+            return Ok(line[5..].to_string());
         }
         panic!()
     }
@@ -424,13 +438,14 @@ impl Stockfish {
         }
     }
 
-    fn is_correct_move(&mut self, _move: &str) -> bool {
+    fn is_correct_move(&mut self, _move: &str) -> CheatessResult<bool> {
         let old_info = self.info.clone();
         self._put(&format!("go depth 1 searchmoves {_move}"));
-        let data = self.proc.lines(&Regex::new("bestmove").unwrap());
+        let data = self.proc.lines(&Regex::new("bestmove")?);
         let result = self.try_get_general_best_move(&data).is_some();
         self.info = old_info;
-        result
+
+        Ok(result)
     }
 
     fn read_line(&mut self) -> String {
@@ -540,7 +555,7 @@ mod tests {
 
         let mut sf = Stockfish::new_with_process(Box::new(mock), 1);
 
-        let fen = sf.get_fen_position();
+        let fen = sf.get_fen_position().unwrap();
 
         let proc = sf.proc.as_any().downcast_ref::<MockProcess>().unwrap();
         assert!(proc.written_lines.contains(&"d".to_string()));
@@ -562,7 +577,7 @@ mod tests {
 
         let mut sf = Stockfish::new_with_process(Box::new(mock), 1);
 
-        let result = sf.is_correct_move("e2e4");
+        let result = sf.is_correct_move("e2e4").unwrap();
         assert!(result);
 
         let proc = sf.proc.as_any().downcast_ref::<MockProcess>().unwrap();
@@ -583,7 +598,7 @@ mod tests {
 
         let mut sf = Stockfish::new_with_process(Box::new(mock), 1);
 
-        let result = sf.is_correct_move("a1a1");
+        let result = sf.is_correct_move("a1a1").unwrap();
         assert!(!result);
 
         let proc = sf.proc.as_any().downcast_ref::<MockProcess>().unwrap();
@@ -750,7 +765,7 @@ mod tests {
         mock.push_read_line("readyok");
 
         let mut sf = Stockfish::new_with_process(Box::new(mock), 1);
-        sf.set_elo_rating(2000);
+        sf.set_elo_rating(2000).unwrap();
 
         let proc = sf.proc.as_any().downcast_ref::<MockProcess>().unwrap();
         assert!(proc
@@ -785,7 +800,7 @@ mod tests {
         params.insert("Threads", "4");
         params.insert("Hash", "256");
 
-        sf.update_params(params);
+        sf.update_params(params).unwrap();
 
         let proc = sf.proc.as_any().downcast_ref::<MockProcess>().unwrap();
         assert!(proc
@@ -822,7 +837,7 @@ mod tests {
         mock.push_read_line("readyok");
 
         let mut sf = Stockfish::new_with_process(Box::new(mock), 1);
-        sf.make_move(vec!["e2e4".to_string()]);
+        sf.make_move(vec!["e2e4".to_string()]).unwrap();
 
         let proc = sf.proc.as_any().downcast_ref::<MockProcess>().unwrap();
         assert!(proc.written_lines.contains(
@@ -853,7 +868,7 @@ mod tests {
         mock.push_read_line("readyok");
 
         let mut sf = Stockfish::new_with_process(Box::new(mock), 1);
-        sf.make_move(vec!["d1d1".to_string()]);
+        sf.make_move(vec!["d1d1".to_string()]).unwrap();
     }
 
     #[test]
@@ -870,7 +885,7 @@ mod tests {
         ];
         let mut sf = Stockfish::new_with_process(Box::new(mock), 11);
 
-        let (eval, pv) = sf.extract_values(&data, 1, 1.0);
+        let (eval, pv) = sf.extract_values(&data, 1, 1.0).unwrap();
 
         assert_eq!(eval, "0.42".to_string());
         assert_eq!(pv, vec!["d1d2".to_string(), "c1c2".to_string()]);
@@ -890,7 +905,7 @@ mod tests {
         ];
         let mut sf = Stockfish::new_with_process(Box::new(mock), 11);
 
-        let (eval, pv) = sf.extract_values(&data, 1, -1.0);
+        let (eval, pv) = sf.extract_values(&data, 1, -1.0).unwrap();
 
         assert_eq!(eval, "-0.47".to_string());
         assert_eq!(pv, vec!["d1d2".to_string()]);
@@ -910,7 +925,7 @@ mod tests {
         ];
         let mut sf = Stockfish::new_with_process(Box::new(mock), 11);
 
-        let (eval, pv) = sf.extract_values(&data, 1, 1.0);
+        let (eval, pv) = sf.extract_values(&data, 1, 1.0).unwrap();
 
         assert_eq!(eval, "M2".to_string());
         assert_eq!(pv, vec!["d1d2".to_string()]);
@@ -930,7 +945,7 @@ mod tests {
         ];
         let mut sf = Stockfish::new_with_process(Box::new(mock), 11);
 
-        let (eval, pv) = sf.extract_values(&data, 1, -1.0);
+        let (eval, pv) = sf.extract_values(&data, 1, -1.0).unwrap();
 
         assert_eq!(eval, "-M1".to_string());
         assert_eq!(pv, vec!["d1d2".to_string()]);
@@ -949,7 +964,7 @@ mod tests {
 
         let mut sf = Stockfish::new_with_process(Box::new(mock), 11);
 
-        let (eval, pv) = sf.extract_values(&data, 1, -1.0);
+        let (eval, pv) = sf.extract_values(&data, 1, -1.0).unwrap();
 
         assert_eq!(eval, "--".to_string());
         assert_eq!(pv, Vec::<String>::new());
@@ -967,7 +982,7 @@ mod tests {
 
         let mut sf = Stockfish::new_with_process(Box::new(mock), 1);
 
-        let (eval, pv) = sf.extract_values(&data, 1, 1.0);
+        let (eval, pv) = sf.extract_values(&data, 1, 1.0).unwrap();
 
         assert_eq!(eval, "--".to_string());
         assert_eq!(pv, vec!["e2e4"]);

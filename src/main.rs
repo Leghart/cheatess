@@ -5,7 +5,7 @@ use std::time::Instant;
 mod core;
 mod utils;
 
-fn main() {
+fn main() -> utils::error::CheatessResult<()> {
     let env_args: Vec<String> = std::env::args().collect();
     let args = utils::parser::parse_args_from(env_args);
 
@@ -13,11 +13,11 @@ fn main() {
 
     match args.mode {
         utils::parser::Mode::Game => game(args),
-        utils::parser::Mode::Test => config_mode(args).expect("Test config failed"),
+        utils::parser::Mode::Test => config_mode(args),
     }
 }
 
-fn game(args: utils::parser::CheatessArgs) {
+fn game(args: utils::parser::CheatessArgs) -> utils::error::CheatessResult<()> {
     clear_screen();
 
     let mut stdout = io::stdout();
@@ -27,16 +27,16 @@ fn game(args: utils::parser::CheatessArgs) {
         &args.stockfish.skill.to_string(),
         &args.stockfish.hash.to_string(),
         &args.stockfish.pv.to_string(),
-    );
+    )?;
 
     let monitor =
         utils::monitor::select_monitor(args.monitor.number).expect("Requested monitor not found");
-    let raw = utils::monitor::capture_entire_screen(&monitor); // ~30ms
-    let raw_gray = core::procimg::image_buffer_to_gray_mat(raw).unwrap(); // ~5ms
-    let coords = core::procimg::get_board_region(&raw_gray); // ~10ms
+    let raw = utils::monitor::capture_entire_screen(&monitor)?; // ~30ms
+    let raw_gray = core::procimg::image_buffer_to_gray_mat(raw)?; // ~5ms
+    let coords = core::procimg::get_board_region(&raw_gray)?; // ~10ms
 
-    let board = core::procimg::crop_mat(&raw_gray, &coords); // ~1ms
-    let player_color = core::procimg::detect_player_color(&board); // ~0.1ms
+    let board = core::procimg::crop_mat(&raw_gray, &coords)?; // ~1ms
+    let player_color = core::procimg::detect_player_color(&board)?; // ~0.1ms
     log::info!("Detected player color: {player_color:?}");
 
     let base_board: Box<dyn core::engine::AnyBoard> = if args.engine.pretty {
@@ -51,8 +51,7 @@ fn game(args: utils::parser::CheatessArgs) {
         args.proc_image.margin,
         args.proc_image.extract_piece_threshold,
         &player_color,
-    )
-    .unwrap();
+    )?;
     let pieces = pieces
         .into_iter()
         .map(|(c, mat)| (c, Arc::new(mat)))
@@ -60,7 +59,7 @@ fn game(args: utils::parser::CheatessArgs) {
 
     let mut prev_board_mat = board;
     let mut prev_board_arr = base_board;
-    for (i, sum) in sf.summary(args.stockfish.pv).iter().enumerate() {
+    for (i, sum) in sf.summary(args.stockfish.pv)?.iter().enumerate() {
         log::info!("====== {i} stockfish line =======");
         log::info!("Evaluation: {:?}", sum.eval);
         log::info!("Best moves: {:?}", sum.best_lines);
@@ -69,14 +68,14 @@ fn game(args: utils::parser::CheatessArgs) {
     loop {
         let start = Instant::now();
         let cropped =
-            utils::monitor::get_cropped_screen(&monitor, coords.0, coords.1, coords.2, coords.3); // ~15ms
-        let gray_board = core::procimg::image_buffer_to_gray_mat(cropped).unwrap(); // ~1ms
+            utils::monitor::get_cropped_screen(&monitor, coords.0, coords.1, coords.2, coords.3)?; // ~15ms
+        let gray_board = core::procimg::image_buffer_to_gray_mat(cropped)?; // ~1ms
 
         if !core::procimg::are_images_different(
             &prev_board_mat,
             &gray_board,
             args.proc_image.difference_level,
-        ) {
+        )? {
             continue;
         }
 
@@ -85,7 +84,7 @@ fn game(args: utils::parser::CheatessArgs) {
             &pieces,
             args.proc_image.piece_threshold,
             args.proc_image.board_threshold,
-        );
+        )?;
         log::trace!("Pieces detection: {:?}", start.elapsed());
         log::trace!(
             "OpenCV matchTemplate result: {}",
@@ -98,7 +97,7 @@ fn game(args: utils::parser::CheatessArgs) {
         match detected_move {
             Ok((mv, mv_type)) => {
                 log::info!("Detected move: {mv:?} [{mv_type:?}]");
-                sf.make_move(vec![mv]);
+                sf.make_move(vec![mv])?;
             }
             Err(e) => {
                 log::error!("{e}");
@@ -120,10 +119,10 @@ fn game(args: utils::parser::CheatessArgs) {
         };
         curr_board.print(&mut stdout);
 
-        for (i, sum) in sf.summary(args.stockfish.pv).iter().enumerate() {
+        for (i, sum) in sf.summary(args.stockfish.pv)?.iter().enumerate() {
             if sum.best_lines.is_empty() {
                 log::info!("Game over");
-                return;
+                return Ok(());
             }
             log::info!("====== {i} stockfish line =======");
             log::info!("Evaluation: {:?}", sum.eval);
@@ -136,7 +135,7 @@ fn game(args: utils::parser::CheatessArgs) {
     }
 }
 
-fn config_mode(args: utils::parser::CheatessArgs) -> Result<(), Box<dyn std::error::Error>> {
+fn config_mode(args: utils::parser::CheatessArgs) -> utils::error::CheatessResult<()> {
     log::info!("Welcome to the interactive test setup for cheatess. Follow the instructions to ensure everything works correctly while playing.");
 
     log::info!("\n[Step 1/7] Collected invoke parameters:");
@@ -150,15 +149,15 @@ fn config_mode(args: utils::parser::CheatessArgs) -> Result<(), Box<dyn std::err
 
     let monitor =
         utils::monitor::select_monitor(args.monitor.number).expect("Requested monitor not found");
-    let raw = utils::monitor::capture_entire_screen(&monitor);
-    let raw_gray = core::procimg::image_buffer_to_gray_mat(raw).unwrap();
+    let raw = utils::monitor::capture_entire_screen(&monitor)?;
+    let raw_gray = core::procimg::image_buffer_to_gray_mat(raw)?;
     core::procimg::show(&raw_gray, true, "Entire screen")?;
 
-    let coords = core::procimg::get_board_region(&raw_gray);
-    let board = core::procimg::crop_mat(&raw_gray, &coords);
+    let coords = core::procimg::get_board_region(&raw_gray)?;
+    let board = core::procimg::crop_mat(&raw_gray, &coords)?;
     core::procimg::show(&board, true, "Cropped board")?;
 
-    let player_color = core::procimg::detect_player_color(&board);
+    let player_color = core::procimg::detect_player_color(&board)?;
     log::warn!("\n[Step 3/7] Detected player color: {player_color:?}");
 
     log::info!("\n[Step 4/7] Now you will see all extracted pieces from board, please check if every is clear");
@@ -175,7 +174,7 @@ fn config_mode(args: utils::parser::CheatessArgs) -> Result<(), Box<dyn std::err
     }
 
     log::info!("[Step 5/7] Now you will see board converted to binary...");
-    let bin_board = core::procimg::convert_board_to_bin(&board, args.proc_image.board_threshold);
+    let bin_board = core::procimg::convert_board_to_bin(&board, args.proc_image.board_threshold)?;
     core::procimg::show(&bin_board, true, "Binary board")?;
 
     log::info!("[Step 6/7] Now check if every piece is correctly placed");
@@ -189,7 +188,7 @@ fn config_mode(args: utils::parser::CheatessArgs) -> Result<(), Box<dyn std::err
         &pieces,
         args.proc_image.piece_threshold,
         args.proc_image.board_threshold,
-    );
+    )?;
 
     let calc_board: Box<dyn core::engine::AnyBoard> = if args.engine.pretty {
         core::engine::create_board_from_data::<core::engine::PrettyPrinter>(
@@ -206,21 +205,23 @@ fn config_mode(args: utils::parser::CheatessArgs) -> Result<(), Box<dyn std::err
 
     log::info!("[Step 7/7] Last step, make any move on your web board and check if move detection is correct (you can configure it with -d flag)");
     log::info!("If you make an exactly one move, press enter...");
-    io::stdin().read_line(&mut String::new())?;
+    io::stdin()
+        .read_line(&mut String::new())
+        .expect("Failed to read line");
 
     let prev_board = board;
     let prev_board_arr = calc_board;
     let new_cropped =
-        utils::monitor::get_cropped_screen(&monitor, coords.0, coords.1, coords.2, coords.3);
-    let new_board = core::procimg::image_buffer_to_gray_mat(new_cropped).unwrap();
+        utils::monitor::get_cropped_screen(&monitor, coords.0, coords.1, coords.2, coords.3)?;
+    let new_board = core::procimg::image_buffer_to_gray_mat(new_cropped)?;
 
     if !core::procimg::are_images_different(
         &prev_board,
         &new_board,
         args.proc_image.difference_level,
-    ) {
+    )? {
         log::error!("Not detected the move");
-        return Err("Not detected the move".into());
+        return Err(utils::error::CheatessError::NoMoveDetected);
     }
 
     let new_raw_board = core::procimg::find_all_pieces(
@@ -228,11 +229,10 @@ fn config_mode(args: utils::parser::CheatessArgs) -> Result<(), Box<dyn std::err
         &pieces,
         args.proc_image.piece_threshold,
         args.proc_image.board_threshold,
-    );
+    )?;
 
     let (detected_move, _) =
-        core::engine::detect_move(prev_board_arr.raw(), &new_raw_board, &player_color)
-            .expect("Not found a move");
+        core::engine::detect_move(prev_board_arr.raw(), &new_raw_board, &player_color)?;
 
     log::info!("Detected move: {detected_move}");
 

@@ -1,8 +1,9 @@
+use crate::utils::error::{CheatessError, CheatessResult};
 use image::{ImageBuffer, Rgba};
 pub use xcap::Monitor;
 
 #[allow(clippy::if_same_then_else)]
-pub fn select_monitor(primary: u8) -> Result<Monitor, Box<dyn std::error::Error>> {
+pub fn select_monitor(primary: u8) -> CheatessResult<Monitor> {
     for m in Monitor::all().unwrap() {
         if primary == 0 && m.is_primary().unwrap() {
             return Ok(m);
@@ -11,14 +12,17 @@ pub fn select_monitor(primary: u8) -> Result<Monitor, Box<dyn std::error::Error>
             return Ok(m);
         }
     }
-    Err("Monitor not found".into())
+
+    Err(CheatessError::MonitorNotFound)
 }
 
-pub fn capture_entire_screen(monitor: &Monitor) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
-    let capture = monitor.capture_image().unwrap();
+pub fn capture_entire_screen(monitor: &Monitor) -> CheatessResult<ImageBuffer<Rgba<u8>, Vec<u8>>> {
+    let capture = monitor.capture_image()?;
 
-    ImageBuffer::<Rgba<u8>, _>::from_raw(capture.width(), capture.height(), capture.into_vec())
-        .unwrap()
+    Ok(
+        ImageBuffer::<Rgba<u8>, _>::from_raw(capture.width(), capture.height(), capture.into_vec())
+            .expect("Failed to create ImageBuffer"),
+    )
 }
 
 pub fn get_cropped_screen(
@@ -27,11 +31,11 @@ pub fn get_cropped_screen(
     y_start: u32,
     width: u32,
     height: u32,
-) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
-    let capture = monitor
-        .capture_region(x_start, y_start, width, height)
-        .unwrap();
+) -> CheatessResult<ImageBuffer<Rgba<u8>, Vec<u8>>> {
+    let capture = monitor.capture_region(x_start, y_start, width, height)?;
 
-    ImageBuffer::<Rgba<u8>, _>::from_raw(capture.width(), capture.height(), capture.into_vec())
-        .unwrap()
+    Ok(
+        ImageBuffer::<Rgba<u8>, _>::from_raw(capture.width(), capture.height(), capture.into_vec())
+            .expect("Failed to create ImageBuffer"),
+    )
 }
