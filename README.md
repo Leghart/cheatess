@@ -63,7 +63,8 @@ Configure the behavior of the Stockfish engine:
 
 Configure which monitor to use for board detection:
 
-- `--number`, `-n` — Select monitor by index (default: `0`, primary monitor)
+- `--name`, `-n` — Select monitor by name (default: `None` - use primary monitor). 
+To see available monitor names, run `xrandr`.
 
 ---
 

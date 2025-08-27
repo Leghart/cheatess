@@ -30,7 +30,7 @@ fn game(args: utils::parser::CheatessArgs) -> utils::error::CheatessResult<()> {
     )?;
 
     let monitor =
-        utils::monitor::select_monitor(args.monitor.number).expect("Requested monitor not found");
+        utils::monitor::select_monitor(args.monitor.name).expect("Requested monitor not found");
     let raw = utils::monitor::capture_entire_screen(&monitor)?; // ~30ms
     let raw_gray = core::procimg::image_buffer_to_gray_mat(raw)?; // ~5ms
     let coords = core::procimg::get_board_region(&raw_gray)?; // ~10ms
@@ -148,7 +148,7 @@ fn config_mode(args: utils::parser::CheatessArgs) -> utils::error::CheatessResul
     log::info!("To get next image, press '0'");
 
     let monitor =
-        utils::monitor::select_monitor(args.monitor.number).expect("Requested monitor not found");
+        utils::monitor::select_monitor(args.monitor.name).expect("Requested monitor not found");
     let raw = utils::monitor::capture_entire_screen(&monitor)?;
     let raw_gray = core::procimg::image_buffer_to_gray_mat(raw)?;
     core::procimg::show(&raw_gray, true, "Entire screen")?;

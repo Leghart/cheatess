@@ -33,8 +33,8 @@ enum Subparser {
 #[derive(Debug, Clone, Parser)]
 /// Monitor configuration. Allows to specify monitor to use
 pub struct MonitorArgs {
-    #[arg(short, long, default_value_t = 0)]
-    pub number: u8,
+    #[arg(short, long, default_value = None)]
+    pub name: Option<String>,
 }
 
 #[derive(Debug, Clone, Args)]
