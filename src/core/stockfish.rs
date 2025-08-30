@@ -6,7 +6,7 @@ use subprocess::{Popen, PopenConfig, Redirection};
 
 pub struct Summary {
     pub eval: String,
-    pub best_lines: Vec<String>,
+    pub main_line: Vec<String>,
 }
 
 pub trait Process: Send {
@@ -291,8 +291,8 @@ impl Stockfish {
 
         let mut output: Vec<Summary> = Vec::with_capacity(search_lines);
         for nth in 1..=search_lines {
-            let (eval, best_lines) = self.extract_values(&lines, nth, color_scaler)?;
-            output.push(Summary { eval, best_lines })
+            let (eval, main_line) = self.extract_values(&lines, nth, color_scaler)?;
+            output.push(Summary { eval, main_line })
         }
         Ok(output)
     }

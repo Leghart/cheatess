@@ -60,9 +60,7 @@ fn game(args: utils::parser::CheatessArgs) -> utils::error::CheatessResult<()> {
     let mut prev_board_mat = board;
     let mut prev_board_arr = base_board;
     for (i, sum) in sf.summary(args.stockfish.pv)?.iter().enumerate() {
-        log::info!("====== {i} stockfish line =======");
-        log::info!("Evaluation: {:?}", sum.eval);
-        log::info!("Best moves: {:?}", sum.best_lines);
+        log_stockfish_summary(i, sum);
     }
 
     loop {
@@ -120,19 +118,41 @@ fn game(args: utils::parser::CheatessArgs) -> utils::error::CheatessResult<()> {
         curr_board.print(&mut stdout);
 
         for (i, sum) in sf.summary(args.stockfish.pv)?.iter().enumerate() {
-            if sum.best_lines.is_empty() {
+            if sum.main_line.is_empty() {
                 log::info!("Game over");
                 return Ok(());
             }
-            log::info!("====== {i} stockfish line =======");
-            log::info!("Evaluation: {:?}", sum.eval);
-            log::info!("Best moves: {:?}", sum.best_lines);
+            log_stockfish_summary(i, sum);
         }
-
         prev_board_arr = curr_board;
         prev_board_mat = gray_board;
         log::debug!("Cycle time: {:?}", start.elapsed());
     }
+}
+
+fn log_stockfish_summary(iter: usize, summary: &core::stockfish::Summary) {
+    fn format_moves(moves: &[String]) -> String {
+        moves
+            .chunks(2)
+            .enumerate()
+            .map(|(i, chunk)| {
+                let m1 = chunk.get(0).cloned().unwrap_or_default();
+                let m2 = chunk.get(1).cloned().unwrap_or_default();
+                format!("{}. {} {}", i + 1, m1, m2)
+            })
+            .collect::<Vec<String>>()
+            .join(" ")
+    }
+
+    log::info!(
+        "\n\
+    ┌────────────── Stockfish line #{iter} ──────────────────\n\
+    │ Evaluation : {}\n\
+    │ Line       : {}\n\
+    └─────────────────────────────────────────────────────",
+        summary.eval,
+        format_moves(&summary.main_line)
+    );
 }
 
 fn config_mode(args: utils::parser::CheatessArgs) -> utils::error::CheatessResult<()> {
